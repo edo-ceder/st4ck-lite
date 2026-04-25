@@ -1,0 +1,16 @@
+{
+  "name": "st4ck-lite",
+  "version": "0.1.0-alpha.0",
+  "description": "Record E2E tests with your AI agent. Replay them forever, for free. No account, no key, no service — just md files in your repo.",
+  "author": "st4ck",
+  "license": "Apache-2.0",
+  "keywords": [
+    "testing",
+    "e2e",
+    "playwright",
+    "agent",
+    "ai",
+    "regression"
+  ],
+  "homepage": "https://st4ck.io"
+}
