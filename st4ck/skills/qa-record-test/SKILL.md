@@ -24,23 +24,29 @@ If the user has `@st4ck/runner` installed locally, prefer the local binary; othe
 
 ## Recording loop
 
-### Step 1 — Spawn the runner in record mode
+### Step 1 — Spawn the runner with a stdin FIFO
+
+The runner emits an `agentic_pause` envelope on stdout and reads line-delimited JSON commands on stdin until you send `{"op":"continue"}` or `{"op":"abort"}`. Each command returns one `ActionResult` JSON object on stdout. To drive it incrementally from Claude Code's blocking Bash tool, spawn the runner with a stdin FIFO so you can send commands one at a time between observations:
 
 ```bash
-npx @st4ck/cli@alpha author <url> "<instruction>" --out tests/<slug>.md
+mkfifo /tmp/st4ck-stdin-$$
+npx @st4ck/runner@alpha record <url> \
+  --instruction "<instruction>" \
+  --out tests/<slug>.md \
+  < /tmp/st4ck-stdin-$$ &
+exec 9>/tmp/st4ck-stdin-$$
 ```
 
-The CLI writes `.st4ck/session.md` (the skill, you're reading the runtime version of it) and prints a one-liner. Then run:
+Run this with `run_in_background: true` so the FIFO stays open while you iterate. Capture the `shell_id`. From now on:
 
-```bash
-npx @st4ck/runner@alpha record <url> --instruction "<instruction>" --out tests/<slug>.md
-```
+- **Read** runner responses with `BashOutput(shell_id)`.
+- **Send** commands with `echo '<json>' >&9` (one JSON object per line).
 
-The runner emits an `agentic_pause` envelope on stdout and waits for IPC commands on stdin.
+Read the `agentic_pause` envelope before sending anything else — it confirms the page loaded and gives you `page_url`.
 
 ### Step 2 — Drive the browser via IPC
 
-Send line-delimited JSON commands. Wait for each response before sending the next.
+Send one command via `echo '<json>' >&9`. Read the result via `BashOutput(shell_id)`. Reason about it. Send the next command. Wait for each response before sending the next — never batch.
 
 **Locator priority** (always prefer earlier shapes):
 1. `{by: 'testid', value: 'sign-in-button'}` — most stable
@@ -152,9 +158,17 @@ Recognized values: `auto` | `web` | `bubble` | `retool` | `webflow` | `n8n` | `w
 4. **One block, one flow.** Don't add side-quests; capture the user's stated intent.
 5. **Continue when satisfied.** When the page state matches the user's instruction, send `{"op":"continue"}`.
 
-### Step 4 — Verify the md file
+### Step 4 — Finish + verify the md file
 
-After `continue`, the runner writes `tests/<slug>.md` and exits 0. Verify the file exists; show the user a 1-line summary:
+When the page state matches the user's instruction, close out:
+
+```bash
+echo '{"op":"continue"}' >&9    # OR: echo '{"op":"abort","reason":"…"}' >&9
+exec 9>&-
+rm -f /tmp/st4ck-stdin-$$
+```
+
+`BashOutput(shell_id)` once more for the final `record_complete` envelope (on continue) or `agentic_aborted` (on abort) and the captured file path. The runner has written `tests/<slug>.md` and exited 0. Surface a 1-line summary:
 
 ```
 Recorded N primitives in tests/<slug>.md. Replay with: npx @st4ck/cli run tests/<slug>.md
