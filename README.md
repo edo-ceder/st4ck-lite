@@ -19,7 +19,7 @@ That's the whole product. Two slash commands. Two npm packages underneath (`@st4
 
 ## Three beats
 
-**1. Agent ergonomics.** A 10-primitive vocabulary (`click`, `fill`, `wait_until`, `evaluate`, `snapshot`, `press`, `select`, `check_box`, `hover`, `upload`) plus line-delimited JSON over stdin/stdout. Your agent already drives a browser; this is the smallest surface that lets it.
+**1. Agent ergonomics.** A focused IPC vocabulary — actions (`navigate`, `click`, `fill`, `press`, `select`, `check_box`, `hover`, `upload`, `wait_until`, `evaluate`), text-based disambiguation (`click_by_text`, `hover_by_text`, `type_by_text`), conditional dispatch (`branch`), observation (`snapshot`, `url`), control (`continue`, `abort`) — over line-delimited JSON on stdin/stdout. Per-call opt-in flags (`dispatch_chain`, `dispatch_events`, `atomic`) handle no-code platform runtimes (Bubble, Retool, Webflow, n8n, Wix Velo, Glide, FlutterFlow). Your agent already drives a browser; this is the smallest surface that lets it.
 
 **2. Authoring-by-use.** Your agent isn't writing a test — it's using the site. The recording **is** the test. Walk through the flow once; you get a markdown file you can rerun, version, share.
 
@@ -55,7 +55,7 @@ That's the whole product. Two slash commands. Two npm packages underneath (`@st4
 
 - `.claude-plugin/plugin.json` — Claude Code marketplace metadata
 - `st4ck/skills/` — record + replay skills (the open subset of methodology)
-- `st4ck/commands/` — slash command aliases (`/st4ck-lite:author`, `/st4ck-lite:run`)
+- `st4ck/commands/` — slash command aliases (`/st4ck-lite:author`, `/st4ck-lite:browse`, `/st4ck-lite:run`)
 - `st4ck/agents/` — recording sub-agent (uses local md files; no MCP key)
 
 The runner itself is the `@st4ck/runner` npm package — same binary the paid plugin uses. The lite plugin doesn't fork the runner; it constrains the SKILL set to what works without an `app.st4ck.io` connection.

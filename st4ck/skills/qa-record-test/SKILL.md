@@ -54,7 +54,8 @@ Send line-delimited JSON commands. Wait for each response before sending the nex
 
 | Op | Shape |
 |---|---|
-| Click | `{"op":"click","locator":{...}}` |
+| Navigate | `{"op":"navigate","url":"https://...","timeout_ms":30000}` |
+| Click | `{"op":"click","locator":{...},"scope":"dialog"}` |
 | Fill | `{"op":"fill","locator":{...},"value":"alice@example.com"}` |
 | Press | `{"op":"press","key":"Enter","locator":{...}}` |
 | Select | `{"op":"select","locator":{...},"value":"opt-1"}` |
@@ -63,6 +64,34 @@ Send line-delimited JSON commands. Wait for each response before sending the nex
 | Upload | `{"op":"upload","locator":{...},"files":["/abs/path"]}` |
 | Wait | `{"op":"wait_until","args":{"kind":"visible","locator":{...}}}` |
 | Eval | `{"op":"evaluate","js":"location.pathname"}` |
+
+**Text disambiguation** (when "Save" / "OK" / "Cancel" appears in multiple places):
+
+| Op | Shape |
+|---|---|
+| Click by text | `{"op":"click_by_text","text":"Save","within":"dialog"}` |
+| Hover by text | `{"op":"hover_by_text","text":"Settings","role":"button"}` |
+| Type by text | `{"op":"type_by_text","text":"Search","value":"my query","within":"dialog"}` |
+
+`within` accepts `"dialog"` or any LocatorSpec. `role` narrows resolution without needing an ancestor.
+
+**Conditional dispatch** — for "if X is visible, do A; else do B":
+
+```json
+{
+  "op": "branch",
+  "args": {
+    "condition": {"kind":"visible","locator":{"by":"text","value":"Welcome back"},"timeout_ms":3000},
+    "then": [],
+    "else": [
+      {"primitive":"click","args":{"locator":{"by":"role","value":"button","options":{"name":"Sign in"}}}},
+      {"primitive":"wait_until","args":{"kind":"visible","locator":{"by":"text","value":"Welcome back"}}}
+    ]
+  }
+}
+```
+
+`condition` uses the same grammar as `wait_until`. Sub-steps inside `then` / `else` use the saved-step shape `{primitive, args, opts?}` — not the IPC `op` shape.
 
 **Observation** (NOT recorded):
 
@@ -77,6 +106,43 @@ Send line-delimited JSON commands. Wait for each response before sending the nex
 |---|---|
 | Continue | `{"op":"continue"}` — finalize the recording, write the md, exit 0 |
 | Abort | `{"op":"abort","reason":"..."}` — discard, exit 1 |
+
+### Step 2.5 — No-code platform flags (per-call opt-ins)
+
+Bubble, Retool, Webflow, n8n, Wix Velo, Glide, and FlutterFlow have reactive runtimes that ignore some of Playwright's native primitive calls. Three per-call flags handle the difference. Set them on every relevant primitive when working against a no-code platform.
+
+- **`click({dispatch_chain: true})`** — Bubble swallows plain `loc.click()`. With `dispatch_chain:true`, the runner dispatches the full `pointerdown → pointerup → click` MouseEvent chain. Required on most Bubble button/icon clicks.
+
+  ```json
+  {"op":"click","locator":{"by":"text","value":"Submit"},"dispatch_chain":true}
+  ```
+
+- **`fill({dispatch_events: ["input","change","blur"]})`** — Bubble's reactive bindings only fire on dispatched events. After the value is set, the runner re-dispatches the named events with `bubbles:true`. Most Bubble text inputs need `["input","change"]`; some additionally need `["blur"]`.
+
+  ```json
+  {"op":"fill","locator":{"by":"label","value":"Email"},"value":"alice","dispatch_events":["input","change"]}
+  ```
+
+- **`select({atomic: true})`** — Defeats Bubble's "Element not found" race during re-render. Performs set-value-and-dispatch-change in a single synchronous evaluate. Single-value only.
+
+  ```json
+  {"op":"select","locator":{"by":"label","value":"Country"},"value":"NL","atomic":true}
+  ```
+
+These are explicit per-call opt-ins — never silent autodetect on the page level.
+
+### Step 2.6 — Session-level platform mode (forthcoming)
+
+A session-level `--platform` flag is shipping in a near-term runner update. When set to a closed-loop platform, the per-call flags above flip on as **defaults** so you don't have to pass them on every primitive:
+
+```bash
+npx @st4ck/runner@alpha record <url> --platform=auto
+npx @st4ck/runner@alpha record <url> --platform=bubble
+```
+
+Detection precedence when `--platform=auto`: explicit flag > response headers > DOM probe > URL pattern > `web` fallback.
+
+Recognized values: `auto` | `web` | `bubble` | `retool` | `webflow` | `n8n` | `wix-velo` | `glide` | `flutterflow`. Until this ships in the runner you're using, set the per-call flags explicitly on every Bubble click/fill/select.
 
 ### Step 3 — Strategy
 
