@@ -5,24 +5,21 @@ argument-hint: <path/to/test.md> [--headless]
 
 # /st4ck-lite:run
 
-Replays an md test file via the `@st4ck/runner` npm package — pure Playwright execution, no LLM. Equivalent to:
+Replays an md test file via the `st4ck` brand binary — pure Playwright execution, no LLM. The wrapper resolves the underlying runner on your behalf.
 
 ```bash
-npx @st4ck/cli run <file.md> [--headless]
+npx st4ck@<version> run <file.md> [--headless]
 ```
+
+Substitute the latest `st4ck` published version (`npm view st4ck version`). The plugin manifest does not pin the CLI version (no schema field for it), so the docs are the only signal — pin in your invocations.
 
 ## What to do
 
 Spawn the runner with:
 ```bash
-npx @st4ck/cli run "$ARGUMENTS"
-```
-
-Or if `@st4ck/runner` is available locally:
-```bash
-npx @st4ck/runner run --test-file "$ARGUMENTS" --no-mcp
+npx st4ck@<version> run "$ARGUMENTS"
 ```
 
 Stream stdio; mirror exit code. Surface the runner's `replay_complete` envelope in the response.
 
-The md format is documented in the `@st4ck/runner` package. Files have YAML frontmatter (name, base_url, created_at) plus a `## Blocks` section with a fenced JSON code block carrying the primitive sequence.
+The md format is documented in the runner package. Files have YAML frontmatter (name, base_url, created_at) plus a `## Blocks` section with a fenced JSON code block carrying the primitive sequence.

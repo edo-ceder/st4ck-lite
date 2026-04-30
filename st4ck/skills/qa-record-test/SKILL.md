@@ -1,11 +1,15 @@
 ---
 name: qa-record-test
-description: Record a deterministic md test file by walking through a site with the IPC primitive vocabulary. Triggers on phrases like "record this test", "capture this flow", "create a test for this site", or via the explicit `/st4ck-lite:author` slash command. Lite-tier: no account, no MCP key, no server connection — just md files.
+description: Record a deterministic md test file by walking through a site with the `st4ck browse` CLI primitive vocabulary. Triggers on phrases like "record this test", "capture this flow", "create a test for this site", or via the explicit `/st4ck-lite:author` slash command. Lite-tier: no account, no MCP key, no server connection — just md files.
 ---
 
 # QA Recording — md File Authoring
 
-You record a test by spawning the `@st4ck/runner` in record mode and driving it via IPC. Every primitive command you issue lands in the recording buffer; on `continue`, the runner serializes the buffer to a markdown file in the user's repo.
+You record a test by driving the `st4ck browse` CLI in `--record` mode. Every primitive command you issue lands in the runner's recording buffer; on `close`, the runner serializes the buffer to a markdown file in the user's repo.
+
+You never run `mkfifo`. You never spawn a background runner. You never echo JSON into a FIFO. The `st4ck browse` CLI hides all of that — each primitive is one Bash call. Multi-session is built in: `-s alice` and `-s bob` route to independent runners.
+
+> **Pin the version.** Substitute the latest `st4ck` published version (`npm view st4ck version`) into every example below. The plugin manifest does not pin the CLI version (no schema field for it), so the docs are the only signal.
 
 ## What you receive
 
@@ -14,31 +18,26 @@ From the `/st4ck-lite:author` slash command (or free-text trigger):
 - `instruction` — natural-language description of what the test verifies
 - Optional `out` path / `name` slug
 
-## First action — confirm the runner is available
+## First action — confirm the brand binary is available
 
 ```bash
-npx -y @st4ck/cli@alpha --help
+npx -y st4ck@<version> --help
 ```
 
-If the user has `@st4ck/runner` installed locally, prefer the local binary; otherwise `npx` into the alpha. If neither works, surface the install instructions to the user and stop.
+If the user has `st4ck` installed locally, prefer the local binary; otherwise `npx` into the latest. If neither works, surface the install instructions to the user and stop.
 
-## Recording loop
+## Recording loop — launch, act, close
 
-### Step 1 — Spawn the runner — recommended one-line recipe
+### Step 1 — Launch the recording session
 
 ```bash
-npx @st4ck/runner@alpha record <url> \
-  --instruction "<instruction>" \
-  --out tests/<slug>.md \
-  --ipc-fifo /tmp/st4ck.fifo &
+npx st4ck@<version> browse launch <url> \
+  --session <slug> \
+  --record --out tests/<slug>.md \
+  --instruction "<instruction>"
 ```
 
-Run this with `run_in_background: true` so the runner stays alive while you iterate. The runner creates `/tmp/st4ck.fifo`, opens it `O_RDWR` (so external writers can come and go without the FIFO seeing EOF), reads commands from it, and unlinks it automatically on exit. Capture the `shell_id`. From now on:
-
-- **Read** runner responses with `BashOutput(shell_id)`.
-- **Send** commands by appending to the FIFO from any other Bash call: `echo '<json>' > /tmp/st4ck.fifo`.
-
-The runner's first stdout envelope is the `runner_ready` envelope:
+The wrapper spawns the runner in the background, opens a session under `~/.st4ck/sessions/<slug>/`, and returns the `runner_ready` envelope on stdout:
 
 ```json
 {
@@ -49,188 +48,148 @@ The runner's first stdout envelope is the `runner_ready` envelope:
 }
 ```
 
-`page_errors` is the buffer of uncaught exceptions thrown during page load (the listener attaches before navigation, so module-load throws are caught). `blank_page_detected: true` means `#root` (or sibling SPA mount points) is empty after a configurable delay (`--blank-page-delay <ms>`, default 4000) — usually correlates with non-empty `page_errors`. Disable detection with `--no-blank-page-check`.
+`page_errors` carries any uncaught exceptions thrown during page load (the listener attaches before navigation, so module-load throws are caught). `blank_page_detected: true` means `#root` (or sibling SPA mount points) is empty after a configurable delay (`--blank-page-delay <ms>`, default 4000) — usually correlates with non-empty `page_errors`. Disable detection with `--no-blank-page-check`.
 
-### Step 1 (alternative) — without `--ipc-fifo`
+The session stays alive between Bash calls; from now on every primitive is one invocation.
 
-If `mkfifo` isn't available (rare — plain Windows without WSL / Git Bash), the legacy 3-line recipe still works:
+### Step 2 — Drive the browser, one primitive per Bash call
 
-```bash
-mkfifo /tmp/st4ck-stdin-$$
-npx @st4ck/runner@alpha record <url> --instruction "<instruction>" --out tests/<slug>.md < /tmp/st4ck-stdin-$$ &
-exec 9>/tmp/st4ck-stdin-$$
-```
-
-`exec 9>` keeps the FIFO writer-side open in the calling shell. Subsequent `echo '<json>' >&9` calls send commands. Fragile — `&` in the wrong place causes a deadlock. Prefer `--ipc-fifo` whenever you can.
-
-### Step 2 — Drive the browser via IPC
-
-Send one command via `echo '<json>' > /tmp/st4ck.fifo`. Read the result via `BashOutput(shell_id)`. Reason about it. Send the next command. Wait for each response before sending the next — never batch.
-
-**Heredoc-friendly multi-line JSON.** `evaluate` JS strings with embedded quotes routinely produce JSON-escape pain when sent on a single line. The runner accumulates lines until JSON.parse succeeds, so heredocs work natively:
-
-```bash
-cat <<'EOF' > /tmp/st4ck.fifo
-{"op":"evaluate",
- "js":"document.querySelectorAll('a, button').length"}
-EOF
-```
-
-Single-line JSON parses on the first line (fast path). Multi-line JSON parses when the final `}` arrives.
+Send one command, read the response envelope, reason about it, send the next. **Never batch primitives blind** — you defeat the point of live verification.
 
 **Locator priority** (always prefer earlier shapes):
-1. `{by: 'testid', value: 'sign-in-button'}` — most stable
-2. `{by: 'role', value: 'button', options: {name: 'Sign in'}}` — accessible name
-3. `{by: 'label', value: 'Email address'}` — form label
-4. `{by: 'placeholder', value: 'you@example.com'}` — placeholder text
-5. `{by: 'text', value: 'Forgot password?'}` — link/button text
-6. `{by: 'css', value: 'form > .submit'}` — last resort
+1. `--by testid --value <id>` — most stable
+2. `--by role --value <role> --name "<accname>"` — accessible name
+3. `--by label --value "<label>"` — form label
+4. `--by placeholder --value "<text>"` — placeholder text
+5. `--by text --value "<text>"` — link/button text
+6. `--by css --value "<sel>"` — last resort
+
+Use `--exact` to demand string equality on `--value` (default is substring).
 
 **Actions** (each captured into the recording):
 
-| Op | Shape |
+| Subcommand | Example |
 |---|---|
-| Navigate | `{"op":"navigate","url":"https://...","timeout_ms":30000}` |
-| Click | `{"op":"click","locator":{...},"scope":"dialog"}` |
-| Fill | `{"op":"fill","locator":{...},"value":"alice@example.com"}` |
-| Press | `{"op":"press","key":"Enter","locator":{...}}` |
-| Select | `{"op":"select","locator":{...},"value":"opt-1"}` |
-| Check | `{"op":"check_box","locator":{...},"checked":true}` |
-| Hover | `{"op":"hover","locator":{...}}` |
-| Upload | `{"op":"upload","locator":{...},"files":["/abs/path"]}` |
-| Wait | `{"op":"wait_until","args":{"kind":"visible","locator":{...}}}` |
-| Eval | `{"op":"evaluate","js":"location.pathname"}` |
+| Navigate | `npx st4ck@<version> browse navigate -s <slug> --url "https://example.com/dashboard"` |
+| Click | `npx st4ck@<version> browse click -s <slug> --by role --value button --name "Sign in"` |
+| Fill | `npx st4ck@<version> browse fill -s <slug> --by label --value "Email" --text "alice@example.com"` |
+| Press | `npx st4ck@<version> browse press -s <slug> --key Enter` (locator optional) |
+| Select | `npx st4ck@<version> browse select -s <slug> --by label --value "Country" --option-value "NL"` (one of `--option-value` / `--option-label` / `--option-index`) |
+| Check_box | `npx st4ck@<version> browse check_box -s <slug> --by label --value "I agree" --checked` (or `--unchecked`) |
+| Hover | `npx st4ck@<version> browse hover -s <slug> --by testid --value "tooltip-trigger"` |
+| Upload | `npx st4ck@<version> browse upload -s <slug> --by testid --value "file-input" --file /abs/path/photo.jpg` (`--file` repeats for multi-file) |
+| Wait until | `npx st4ck@<version> browse wait_until -s <slug> --js "document.querySelectorAll('[data-row]').length > 0" --timeout-ms 10000` |
+| Evaluate | `npx st4ck@<version> browse evaluate -s <slug> --js "document.title"` |
+
+**Scope** — every locator-bearing action accepts `--scope-by <kind> --scope-value <v>` to constrain the locator to a container element (e.g. `--scope-by role --scope-value dialog` to disambiguate inside a modal).
 
 **Text disambiguation** (when "Save" / "OK" / "Cancel" appears in multiple places):
 
-| Op | Shape |
+| Subcommand | Example |
 |---|---|
-| Click by text | `{"op":"click_by_text","text":"Save","within":"dialog"}` |
-| Hover by text | `{"op":"hover_by_text","text":"Settings","role":"button"}` |
-| Type by text | `{"op":"type_by_text","text":"Search","value":"my query","within":"dialog"}` |
+| Click by text | `npx st4ck@<version> browse click-by-text -s <slug> --text "Save" --within-by role --within-value dialog` |
+| Hover by text | `npx st4ck@<version> browse hover-by-text -s <slug> --text "Settings" --role button` |
+| Type by text | `npx st4ck@<version> browse type-by-text -s <slug> --text "Search" --value "my query" --within-by role --within-value dialog` |
 
-`within` accepts `"dialog"` or any LocatorSpec. `role` narrows resolution without needing an ancestor.
+`--within-by` + `--within-value` accept any locator shape. `--role` narrows resolution without needing an ancestor. Use `--exact` to demand string equality.
 
 **Conditional dispatch** — for "if X is visible, do A; else do B":
 
-```json
-{
-  "op": "branch",
-  "args": {
-    "condition": {"kind":"visible","locator":{"by":"text","value":"Welcome back"},"timeout_ms":3000},
-    "then": [],
-    "else": [
-      {"primitive":"click","args":{"locator":{"by":"role","value":"button","options":{"name":"Sign in"}}}},
-      {"primitive":"wait_until","args":{"kind":"visible","locator":{"by":"text","value":"Welcome back"}}}
-    ]
-  }
-}
+```bash
+npx st4ck@<version> browse branch -s <slug> --json '{"condition":{"kind":"visible","locator":{"by":"text","value":"Welcome back"},"timeout_ms":3000},"then":[],"else":[{"primitive":"click","args":{"locator":{"by":"role","value":"button","options":{"name":"Sign in"}}}},{"primitive":"wait_until","args":{"kind":"visible","locator":{"by":"text","value":"Welcome back"}}}]}'
 ```
 
-`condition` uses the same grammar as `wait_until`. Sub-steps inside `then` / `else` use the saved-step shape `{primitive, args, opts?}` — not the IPC `op` shape.
+`condition` uses the same grammar as `wait_until` (kind / locator / url / js). Sub-steps inside `then` / `else` use the saved-step shape `{primitive, args, opts?}`.
 
-**Observation + diagnostic** (NOT recorded):
+**Observation + diagnostic subcommands** (NOT recorded):
 
-| Op | Use |
+| Subcommand | Use |
 |---|---|
-| Snapshot | `{"op":"snapshot"}` — get a11y tree of the page |
-| URL | `{"op":"url"}` — current page URL |
-| Page errors | `{"op":"page_errors","clear":true}` — drain the buffer of uncaught exceptions thrown by the page since session start. The listener attaches before navigation, so module-load throws are caught. Pass `clear:false` to peek without clearing. |
+| Snapshot | `npx st4ck@<version> browse snapshot -s <slug>` — get the a11y tree of the page |
+| URL | `npx st4ck@<version> browse url -s <slug>` — get the current page URL |
+| Page errors | `npx st4ck@<version> browse page-errors -s <slug> [--no-clear]` — drain (default) or peek the buffer of uncaught exceptions thrown by the page since session start. Listener attaches before navigation, so module-load throws are caught. |
 
-**Control flow:**
-
-| Op | Effect |
-|---|---|
-| Continue | `{"op":"continue"}` — finalize the recording, write the md, exit 0 |
-| Abort | `{"op":"abort","reason":"..."}` — discard, exit 1 |
-
-stdin closing (writer-side disappears, e.g. Ctrl-C in the holder shell, agent process dies) is treated as `eof` — the trace IS saved (same as `continue`), not discarded. Only an explicit `{"op":"abort",...}` discards.
-
-### Step 2.5 — Reactive-UI flags (NOT just no-code platforms)
-
-Three per-call flags handle frameworks that listen for full pointer event chains rather than Playwright's native synthesized events. **They apply to ANY reactive UI**, not just no-code platforms:
-
-- **Radix UI** dropdowns / popovers / menus / context menus
-- **Headless UI** menus + listboxes
-- **MUI menus** with custom-styled triggers
-- **shadcn/ui** components (same Radix root)
-- **FlutterFlow**, **Bubble**, **Retool**, **Webflow**, **n8n**, **Wix Velo**, **Glide**
-
-Set the relevant flag whenever a click visibly succeeds but the component doesn't react.
-
-- **`click({dispatch_chain: true})`** — Plain `loc.click()` produces a synthetic click that reactive frameworks ignore. With `dispatch_chain:true`, the runner dispatches the full `pointerdown → pointerup → click` MouseEvent chain. Required on most Bubble button/icon clicks AND most Radix-driven UI.
-
-  ```json
-  {"op":"click","locator":{"by":"text","value":"Submit"},"dispatch_chain":true}
-  ```
-
-- **`fill({dispatch_events: ["input","change","blur"]})`** — Reactive bindings (Bubble, Radix-controlled inputs, Headless UI combobox values) only fire on dispatched events. After the value is set, the runner re-dispatches the named events with `bubbles:true`. Most reactive text inputs need `["input","change"]`; some additionally need `["blur"]`.
-
-  ```json
-  {"op":"fill","locator":{"by":"label","value":"Email"},"value":"alice","dispatch_events":["input","change"]}
-  ```
-
-- **`select({atomic: true})`** — Defeats the "Element not found" race that Bubble / Radix re-renders trigger during select. Performs set-value-and-dispatch-change in a single synchronous evaluate. Single-value only.
-
-  ```json
-  {"op":"select","locator":{"by":"label","value":"Country"},"value":"NL","atomic":true}
-  ```
-
-These are explicit per-call opt-ins — never silent autodetect on the page level.
-
-### Step 2.6 — Session-level platform mode (forthcoming)
-
-A session-level `--platform` flag is shipping in a near-term runner update. When set to a closed-loop platform, the per-call flags above flip on as **defaults** so you don't have to pass them on every primitive:
+**Multi-session** — open two browsers under different `--session` names and interleave commands:
 
 ```bash
-npx @st4ck/runner@alpha record <url> --platform=auto
-npx @st4ck/runner@alpha record <url> --platform=bubble
+npx st4ck@<version> browse launch https://app.com -s alice --record --out tests/alice.md
+npx st4ck@<version> browse launch https://app.com -s bob   --record --out tests/bob.md
+npx st4ck@<version> browse click -s alice --by role --value button --name "Login"
+npx st4ck@<version> browse fill  -s bob   --by label --value "Email" --text "bob@..."
+npx st4ck@<version> browse list   # see alive vs stale sessions
 ```
 
-Detection precedence when `--platform=auto`: explicit flag > response headers > DOM probe > URL pattern > `web` fallback.
+Each `-s <name>` routes to its own runner + browser context. `npx st4ck@<version> browse list` enumerates active sessions.
 
-Recognized values: `auto` | `web` | `bubble` | `retool` | `webflow` | `n8n` | `wix-velo` | `glide` | `flutterflow`. Until this ships in the runner you're using, set the per-call flags explicitly on every Bubble click/fill/select.
+### Step 2.5 — Reactive UIs (Bubble, Radix, Headless UI, MUI menus, etc.)
 
-### Step 2.7 — Fail-fast on 0-match locators
+Some UIs need pointer-event chains rather than synthesized clicks: **Radix UI** dropdowns / popovers / menus, **Headless UI** menus + listboxes, **MUI menus** with custom-styled triggers, **shadcn/ui** components (Radix root underneath), and most no-code platforms (**Bubble**, **Retool**, **Webflow**, **n8n**, **Wix Velo**, **Glide**, **FlutterFlow**).
 
-By default, `click` / `fill` / `select` / `hover` / `check_box` pre-check `loc.count()` at issue time and fail immediately if zero elements match — rather than burning the full 30s timeout in Playwright's auto-wait. Auto-wait is for actionability (visible / enabled / stable), not existence; for "wait for an element to appear" use `{"op":"wait_until",...}` first. The fail-fast saves ~30s per typo'd selector or wrong role guess.
+Symptom: `click` returns `status: "passed"` but the UI doesn't react. The result envelope's `evidence.result` carries `body_changed: false` — confirming the click hit a no-op.
 
-To restore Playwright's wait-for-element behavior on a specific call, set `fail_fast: false` in the args.
+**Fix:** launch with `--platform=<v>`. The wrapper forwards the flag to the runner, which (when supported) flips per-call reactive flags (`dispatch_chain`, `dispatch_events`, `atomic`) on as defaults for the whole session.
 
-### Step 2.8 — Click change-evidence
+```bash
+npx st4ck@<version> browse launch https://app.bubbleapps.io --platform=bubble -s <slug> --record --out tests/<slug>.md
+npx st4ck@<version> browse launch https://radix-app.example.com --platform=auto -s <slug> --record --out tests/<slug>.md
+```
 
-Every successful `click` returns evidence of whether the click changed page state. The result envelope's `evidence.result` carries `url_before` / `url_after` / `title_before` / `title_after` / `body_changed`. `body_changed: false` after a click you expected to do something signals a no-op click — usually a missing `dispatch_chain: true` on a Radix/Bubble component, an invisible overlay, or an unbound handler.
+Recognized values: `auto` | `web` | `bubble` | `retool` | `webflow` | `n8n` | `wix-velo` | `glide` | `flutterflow`. With `auto`, the runner detects via response headers > DOM probes > URL pattern.
+
+Per-call `--dispatch-chain` / `--dispatch-events` / `--atomic` flags on individual subcommands are not yet first-class in the wrapper CLI; use session-level `--platform` for now.
+
+### Step 2.6 — Fail-fast on 0-match locators
+
+By default, `click` / `fill` / `select` / `hover` / `check_box` pre-check element count at issue time and fail immediately if zero elements match — rather than burning the full 30s timeout in Playwright's auto-wait. Auto-wait is for actionability (visible / enabled / stable), not existence; for "wait for an element to appear" first send `wait_until`. The fail-fast saves ~30s per typo'd selector.
+
+### Step 2.7 — Click change-evidence
+
+Every successful `click` returns evidence of whether the click changed page state. The result envelope's `evidence.result` carries `url_before` / `url_after` / `title_before` / `title_after` / `body_changed`. `body_changed: false` after a click you expected to do something signals a no-op — usually a Radix/Bubble component needing `--platform=<v>`, an invisible overlay, or an unbound handler.
 
 ### Step 3 — Strategy
 
-1. **Snapshot first.** Send `{"op":"snapshot"}` to discover stable locators.
+1. **Snapshot first.** `npx st4ck@<version> browse snapshot -s <slug>` to discover stable locators.
 2. **Use stable locators.** `testid` > `role+name` > `label`.
 3. **Wait deliberately.** After clicks that trigger navigation or modals, follow with `wait_until`.
 4. **One block, one flow.** Don't add side-quests; capture the user's stated intent.
-5. **Continue when satisfied.** When the page state matches the user's instruction, send `{"op":"continue"}`.
+5. **Close when satisfied.** When the page state matches the user's instruction, close the session — the wrapper saves the recording.
 
 ### Step 4 — Finish + verify the md file
 
-When the page state matches the user's instruction, close out by appending the control command to the FIFO:
-
 ```bash
-echo '{"op":"continue"}' > /tmp/st4ck.fifo    # saves the trace, exits 0
-# OR
-echo '{"op":"abort","reason":"<short>"}' > /tmp/st4ck.fifo   # discards, exits 1
+# Saves the trace (because launch was --record), exits 0.
+npx st4ck@<version> browse close -s <slug>
+
+# OR — discard the session entirely.
+npx st4ck@<version> browse abort -s <slug> --reason "<short>"
 ```
 
-The runner unlinks the FIFO automatically on exit. If you used the legacy recipe (no `--ipc-fifo`), also clean up the holder shell's writer end: `exec 9>&-; rm -f /tmp/st4ck-stdin-$$`.
-
-`BashOutput(shell_id)` once more for the final `record_complete` envelope (on continue / EOF) or `agentic_aborted` (on abort) and the captured file path. The runner has written `tests/<slug>.md` and exited 0. Surface a 1-line summary:
+`close` waits for the runner's `record_complete` envelope before cleaning up the session directory. The wrapper writes `tests/<slug>.md` (or wherever you set via `--out`) and exits 0. Surface a 1-line summary:
 
 ```
-Recorded N primitives in tests/<slug>.md. Replay with: npx @st4ck/cli run tests/<slug>.md
+Recorded N primitives in tests/<slug>.md. Replay with: npx st4ck@<version> run tests/<slug>.md
 ```
+
+`abort` is **idempotent** — re-running it on a session that's already gone returns an `abort_noop` envelope and exits 0.
+
+## Exit codes — per subcommand
+
+| Code | Meaning |
+|---|---|
+| `0` | Action succeeded; envelope on stdout has `status: "passed"` (or `runner_ready` for launch). |
+| `1` | Action failed; envelope on stdout has `status: "failed"` plus `error.class` + `error.detail`. |
+| `2` | Session lock contention — couldn't acquire within 5s. Retry the command once. |
+| `3` | Session is dead — runner PID gone. `browse abort -s <name>` then re-launch. |
+| `4` | Runner protocol error — corrupt envelope, unexpected stream close, startup timeout. |
+| `5` | Bad CLI input — unknown flag, malformed value, invalid session name. |
+
+`launch` and `close` follow the same contract. `list` always exits `0`.
 
 ## Hard rules
 
 - **No MCP. No key. No server connection.** Lite-tier means everything works offline against md files. If you find yourself reaching for `app.st4ck.io` tools — wrong skill; you're in the paid plugin's territory.
 - **No human-click recording.** The agent drives. Human-click codegen frames the product as "yet another recorder"; agent-driven IS the differentiation.
+- **No `mkfifo`. No `--ipc-fifo`. No `exec 9>FIFO`. No background `st4ck-runner record` with raw FIFO mechanics.** The `st4ck browse` CLI is the abstraction; the wrapper handles every layer below it. If you find yourself writing FIFO recipes, STOP — you're working at the wrong layer.
 - **Don't author components.** Lite tier records flat primitive sequences into a single test md. The component layer (TRIAD, KB, intent_sources, signing) is the paid plugin's surface.
 - **Don't sign tests.** Lite tier has no signing concept. The md file replays as-is.
 - **Don't run the test from this skill.** Recording produces the md file; the user runs it via `/st4ck-lite:run` when ready.
@@ -240,7 +199,7 @@ Recorded N primitives in tests/<slug>.md. Replay with: npx @st4ck/cli run tests/
 Replay is a separate skill — `/st4ck-lite:run <path>`:
 
 ```bash
-npx @st4ck/cli@alpha run tests/<slug>.md
+npx st4ck@<version> run tests/<slug>.md
 ```
 
 Zero LLM. Pure Playwright. Reports pass/fail per block. Caller decides what to do with the verdict.

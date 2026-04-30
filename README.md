@@ -13,7 +13,7 @@ The free Claude Code plugin for st4ck. Captures agent-driven sessions as determi
 /st4ck-lite:run tests/sign-in-as-alice.md
 ```
 
-That's the whole product. Two slash commands. Two npm packages underneath (`@st4ck/runner` + `@st4ck/cli`). Zero magic.
+That's the whole product. Two slash commands. Two npm packages underneath (`st4ck` brand binary + the runner it wraps). Zero magic.
 
 ---
 
@@ -71,12 +71,15 @@ In Claude Code:
 /plugin install st4ck-lite
 ```
 
-Or use the standalone CLI without a plugin:
+Or use the standalone CLI without a plugin (substitute the latest version from `npm view st4ck version`):
 
 ```bash
-npx @st4ck/cli@alpha author https://example.com "..."
-npx @st4ck/cli@alpha run ./tests/sign-in-as-alice.md
+npx st4ck@<version> author https://example.com "Sign in as alice and verify the dashboard loads"
+npx st4ck@<version> browse launch https://example.com --record --out ./tests/sign-in-as-alice.md
+npx st4ck@<version> run ./tests/sign-in-as-alice.md
 ```
+
+The npm package is `st4ck` (binary name `st4ck`); pin the version explicitly in your invocations since the plugin manifest schema has no version-pinning field.
 
 ---
 
