@@ -150,7 +150,7 @@ npx st4ck@latest browse branch -s <slug> --json '{"condition":{"kind":"visible",
 | Subcommand | Use |
 |---|---|
 | Snapshot | `npx st4ck@latest browse snapshot -s <slug>` — get the a11y tree of the page |
-| Screenshot | `npx st4ck@latest browse screenshot -s <slug> --out <path.png>` — write a PNG to disk for visual audit. Add `--full-page` for the entire scrollable page; `--type jpeg --quality N` for compressed; `--clip x,y,w,h` for a region. Pair with the agent's Read tool to inspect what was captured. |
+| Screenshot | `npx st4ck@latest browse screenshot -s <slug> --out <path.png>` — write a PNG to disk for visual audit. Add `--full-page` for the entire scrollable page; `--type jpeg --quality N` for compressed; `--clip x,y,w,h` for a region; **`--by role --value button --name "Save"`** for a locator-driven element-only capture (best for visual diffs — survives layout shifts). Pair with the agent's Read tool to inspect what was captured. |
 | URL | `npx st4ck@latest browse url -s <slug>` — get the current page URL |
 | Page errors | `npx st4ck@latest browse page-errors -s <slug> [--no-clear]` — drain (default) or peek the buffer of uncaught exceptions thrown by the page since session start. Listener attaches before navigation, so module-load throws are caught. |
 
