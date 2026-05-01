@@ -37,6 +37,38 @@ npx st4ck@latest browse launch <url> \
   --instruction "<instruction>"
 ```
 
+#### Browser-context emulation flags (mobile, locale, timezone, dark mode, geolocation)
+
+For sites where viewport / touch / locale / timezone / color scheme / geolocation matter (mobile-responsive apps, locale-aware UIs, time-of-day-sensitive logic), add Playwright-style emulation flags to the launch:
+
+| Flag | What it does |
+|---|---|
+| `--device "iPhone 14 Pro"` | Apply a Playwright device descriptor (viewport + UA + DPR + isMobile + hasTouch). The right way to test mobile — viewport-only emulation does NOT trigger `@media (pointer: coarse)` / mobile UA gating. See `npx playwright devices` for the full list. |
+| `--viewport "393x852"` | Standalone viewport (no UA / touch change), or override the viewport from `--device`. |
+| `--user-agent "..."` | Custom UA. Standalone or overrides `--device`'s UA. |
+| `--locale "he-IL"` | BCP 47 locale. Drives `Intl.*`, `navigator.language`, `Accept-Language`. |
+| `--timezone "Asia/Jerusalem"` | IANA timezone — drives `new Date()` and `Intl` timezone. |
+| `--color-scheme dark` | One of `light` / `dark` / `no-preference`. Drives `prefers-color-scheme`. |
+| `--geolocation "lat,lon"` | Seeds `navigator.geolocation`. Auto-grants the geolocation permission so the prompt doesn't block. |
+| `--permissions clipboard-read,notifications` | CSV of permissions to grant via `context.grantPermissions()`. |
+| `--http-credentials "user:pass"` | HTTP Basic auth for staging environments. |
+| `--offline` | Start the context offline. |
+| `--bypass-csp` | Bypass the page's Content-Security-Policy. |
+
+Composite mobile-Hebrew-Tel Aviv example:
+
+```bash
+npx st4ck@latest browse launch https://app.example.com \
+  --session plenty-mobile --record --out tests/plenty-mobile.md \
+  --device "iPhone 14 Pro" \
+  --locale "he-IL" \
+  --timezone "Asia/Jerusalem" \
+  --color-scheme dark \
+  --geolocation "32.0853,34.7818"
+```
+
+Wrapper-side validation rejects bad strings (`--viewport foo`, `--geolocation 91,0`, etc.) in <100ms BEFORE Chromium spawns.
+
 The wrapper spawns the runner in the background, opens a session under `~/.st4ck/sessions/<slug>/`, and returns the `runner_ready` envelope on stdout:
 
 ```json
