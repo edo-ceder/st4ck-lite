@@ -150,8 +150,26 @@ npx st4ck@latest browse branch -s <slug> --json '{"condition":{"kind":"visible",
 | Subcommand | Use |
 |---|---|
 | Snapshot | `npx st4ck@latest browse snapshot -s <slug>` — get the a11y tree of the page |
+| Screenshot | `npx st4ck@latest browse screenshot -s <slug> --out <path.png>` — write a PNG to disk for visual audit. Add `--full-page` for the entire scrollable page; `--type jpeg --quality N` for compressed; `--clip x,y,w,h` for a region. Pair with the agent's Read tool to inspect what was captured. |
 | URL | `npx st4ck@latest browse url -s <slug>` — get the current page URL |
 | Page errors | `npx st4ck@latest browse page-errors -s <slug> [--no-clear]` — drain (default) or peek the buffer of uncaught exceptions thrown by the page since session start. Listener attaches before navigation, so module-load throws are caught. |
+
+**Mid-session viewport resize** (recorded — replays restore the viewport):
+
+```bash
+# Page-level resize. UA / DPR / isMobile stay as set at launch.
+# Use to audit responsive breakpoints (360 / 393 / 414 / 768) in one session.
+npx st4ck@latest browse set_viewport_size -s <slug> --viewport 360x740
+```
+
+**`wait_until` — full Playwright wait surface:**
+
+| Form | Maps to |
+|---|---|
+| `wait_until --js "<expr>"` (kind=custom, default if --js) | `page.waitForFunction` |
+| `wait_until --url "<pattern>"` (kind=url) | `page.waitForURL` |
+| `wait_until --by ... --value ... [--kind visible\|hidden\|attached\|detached]` | `locator.waitFor({state})` |
+| `wait_until --kind networkidle` | `page.waitForLoadState("networkidle")` |
 
 **Multi-session** — open two browsers under different `--session` names and interleave commands:
 
