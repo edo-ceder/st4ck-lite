@@ -71,15 +71,15 @@ In Claude Code:
 /plugin install st4ck-lite
 ```
 
-Or use the standalone CLI without a plugin (substitute the latest version from `npm view st4ck version`):
+Or use the standalone CLI without a plugin (`@latest` always resolves to the current release):
 
 ```bash
-npx st4ck@<version> author https://example.com "Sign in as alice and verify the dashboard loads"
-npx st4ck@<version> browse launch https://example.com --record --out ./tests/sign-in-as-alice.md
-npx st4ck@<version> run ./tests/sign-in-as-alice.md
+npx st4ck@latest author https://example.com "Sign in as alice and verify the dashboard loads"
+npx st4ck@latest browse launch https://example.com --record --out ./tests/sign-in-as-alice.md
+npx st4ck@latest run ./tests/sign-in-as-alice.md
 ```
 
-The npm package is `st4ck` (binary name `st4ck`); pin the version explicitly in your invocations since the plugin manifest schema has no version-pinning field.
+The npm package is `st4ck` (binary name `st4ck`). For CI / reproducibility, pin to a specific version (e.g. `npx st4ck@0.2.0-alpha.1 …`); see `npm view st4ck versions` for the list. The plugin manifest schema has no version-pinning field, so pinning happens at invocation time.
 
 ---
 

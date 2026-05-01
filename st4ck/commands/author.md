@@ -10,10 +10,10 @@ Activates the `qa-record-test` skill to capture an agent-driven walkthrough as a
 Bootstrap (one-time, optional):
 
 ```bash
-npx st4ck@<version> author <url> "<instruction>"
+npx st4ck@latest author <url> "<instruction>"
 ```
 
-This writes a `.st4ck/session.md` skill file teaching the new CLI surface. Substitute the latest `st4ck` version (`npm view st4ck version`); the plugin manifest does not pin the CLI version, so pin in your invocation.
+This writes a `.st4ck/session.md` skill file teaching the new CLI surface. `@latest` resolves to the current release at invocation time.
 
 ## What to do
 

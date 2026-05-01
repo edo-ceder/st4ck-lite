@@ -8,16 +8,16 @@ argument-hint: <path/to/test.md> [--headless]
 Replays an md test file via the `st4ck` brand binary — pure Playwright execution, no LLM. The wrapper resolves the underlying runner on your behalf.
 
 ```bash
-npx st4ck@<version> run <file.md> [--headless]
+npx st4ck@latest run <file.md> [--headless]
 ```
 
-Substitute the latest `st4ck` published version (`npm view st4ck version`). The plugin manifest does not pin the CLI version (no schema field for it), so the docs are the only signal — pin in your invocations.
+`@latest` resolves to the current release at invocation time. Pin to an explicit version (e.g. `npx st4ck@0.2.0-alpha.1`) only when reproducibility matters.
 
 ## What to do
 
 Spawn the runner with:
 ```bash
-npx st4ck@<version> run "$ARGUMENTS"
+npx st4ck@latest run "$ARGUMENTS"
 ```
 
 Stream stdio; mirror exit code. Surface the runner's `replay_complete` envelope in the response.

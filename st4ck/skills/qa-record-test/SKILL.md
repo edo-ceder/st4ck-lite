@@ -9,7 +9,7 @@ You record a test by driving the `st4ck browse` CLI in `--record` mode. Every pr
 
 You never run `mkfifo`. You never spawn a background runner. You never echo JSON into a FIFO. The `st4ck browse` CLI hides all of that — each primitive is one Bash call. Multi-session is built in: `-s alice` and `-s bob` route to independent runners.
 
-> **Pin the version.** Substitute the latest `st4ck` published version (`npm view st4ck version`) into every example below. The plugin manifest does not pin the CLI version (no schema field for it), so the docs are the only signal.
+> **Version.** Examples use `npx st4ck@latest` — npm always serves the current release. To pin (CI reproducibility, rollback), substitute an explicit version (e.g. `npx st4ck@0.2.0-alpha.1`); see `npm view st4ck versions` for the list.
 
 ## What you receive
 
@@ -21,7 +21,7 @@ From the `/st4ck-lite:author` slash command (or free-text trigger):
 ## First action — confirm the brand binary is available
 
 ```bash
-npx -y st4ck@<version> --help
+npx -y st4ck@latest --help
 ```
 
 If the user has `st4ck` installed locally, prefer the local binary; otherwise `npx` into the latest. If neither works, surface the install instructions to the user and stop.
@@ -31,7 +31,7 @@ If the user has `st4ck` installed locally, prefer the local binary; otherwise `n
 ### Step 1 — Launch the recording session
 
 ```bash
-npx st4ck@<version> browse launch <url> \
+npx st4ck@latest browse launch <url> \
   --session <slug> \
   --record --out tests/<slug>.md \
   --instruction "<instruction>"
@@ -70,16 +70,16 @@ Use `--exact` to demand string equality on `--value` (default is substring).
 
 | Subcommand | Example |
 |---|---|
-| Navigate | `npx st4ck@<version> browse navigate -s <slug> --url "https://example.com/dashboard"` |
-| Click | `npx st4ck@<version> browse click -s <slug> --by role --value button --name "Sign in"` |
-| Fill | `npx st4ck@<version> browse fill -s <slug> --by label --value "Email" --text "alice@example.com"` |
-| Press | `npx st4ck@<version> browse press -s <slug> --key Enter` (locator optional) |
-| Select | `npx st4ck@<version> browse select -s <slug> --by label --value "Country" --option-value "NL"` (one of `--option-value` / `--option-label` / `--option-index`) |
-| Check_box | `npx st4ck@<version> browse check_box -s <slug> --by label --value "I agree" --checked` (or `--unchecked`) |
-| Hover | `npx st4ck@<version> browse hover -s <slug> --by testid --value "tooltip-trigger"` |
-| Upload | `npx st4ck@<version> browse upload -s <slug> --by testid --value "file-input" --file /abs/path/photo.jpg` (`--file` repeats for multi-file) |
-| Wait until | `npx st4ck@<version> browse wait_until -s <slug> --js "document.querySelectorAll('[data-row]').length > 0" --timeout-ms 10000` |
-| Evaluate | `npx st4ck@<version> browse evaluate -s <slug> --js "document.title"` |
+| Navigate | `npx st4ck@latest browse navigate -s <slug> --url "https://example.com/dashboard"` |
+| Click | `npx st4ck@latest browse click -s <slug> --by role --value button --name "Sign in"` |
+| Fill | `npx st4ck@latest browse fill -s <slug> --by label --value "Email" --text "alice@example.com"` |
+| Press | `npx st4ck@latest browse press -s <slug> --key Enter` (locator optional) |
+| Select | `npx st4ck@latest browse select -s <slug> --by label --value "Country" --option-value "NL"` (one of `--option-value` / `--option-label` / `--option-index`) |
+| Check_box | `npx st4ck@latest browse check_box -s <slug> --by label --value "I agree" --checked` (or `--unchecked`) |
+| Hover | `npx st4ck@latest browse hover -s <slug> --by testid --value "tooltip-trigger"` |
+| Upload | `npx st4ck@latest browse upload -s <slug> --by testid --value "file-input" --file /abs/path/photo.jpg` (`--file` repeats for multi-file) |
+| Wait until | `npx st4ck@latest browse wait_until -s <slug> --js "document.querySelectorAll('[data-row]').length > 0" --timeout-ms 10000` |
+| Evaluate | `npx st4ck@latest browse evaluate -s <slug> --js "document.title"` |
 
 **Scope** — every locator-bearing action accepts `--scope-by <kind> --scope-value <v>` to constrain the locator to a container element (e.g. `--scope-by role --scope-value dialog` to disambiguate inside a modal).
 
@@ -87,16 +87,16 @@ Use `--exact` to demand string equality on `--value` (default is substring).
 
 | Subcommand | Example |
 |---|---|
-| Click by text | `npx st4ck@<version> browse click-by-text -s <slug> --text "Save" --within-by role --within-value dialog` |
-| Hover by text | `npx st4ck@<version> browse hover-by-text -s <slug> --text "Settings" --role button` |
-| Type by text | `npx st4ck@<version> browse type-by-text -s <slug> --text "Search" --value "my query" --within-by role --within-value dialog` |
+| Click by text | `npx st4ck@latest browse click-by-text -s <slug> --text "Save" --within-by role --within-value dialog` |
+| Hover by text | `npx st4ck@latest browse hover-by-text -s <slug> --text "Settings" --role button` |
+| Type by text | `npx st4ck@latest browse type-by-text -s <slug> --text "Search" --value "my query" --within-by role --within-value dialog` |
 
 `--within-by` + `--within-value` accept any locator shape. `--role` narrows resolution without needing an ancestor. Use `--exact` to demand string equality.
 
 **Conditional dispatch** — for "if X is visible, do A; else do B":
 
 ```bash
-npx st4ck@<version> browse branch -s <slug> --json '{"condition":{"kind":"visible","locator":{"by":"text","value":"Welcome back"},"timeout_ms":3000},"then":[],"else":[{"primitive":"click","args":{"locator":{"by":"role","value":"button","options":{"name":"Sign in"}}}},{"primitive":"wait_until","args":{"kind":"visible","locator":{"by":"text","value":"Welcome back"}}}]}'
+npx st4ck@latest browse branch -s <slug> --json '{"condition":{"kind":"visible","locator":{"by":"text","value":"Welcome back"},"timeout_ms":3000},"then":[],"else":[{"primitive":"click","args":{"locator":{"by":"role","value":"button","options":{"name":"Sign in"}}}},{"primitive":"wait_until","args":{"kind":"visible","locator":{"by":"text","value":"Welcome back"}}}]}'
 ```
 
 `condition` uses the same grammar as `wait_until` (kind / locator / url / js). Sub-steps inside `then` / `else` use the saved-step shape `{primitive, args, opts?}`.
@@ -105,21 +105,21 @@ npx st4ck@<version> browse branch -s <slug> --json '{"condition":{"kind":"visibl
 
 | Subcommand | Use |
 |---|---|
-| Snapshot | `npx st4ck@<version> browse snapshot -s <slug>` — get the a11y tree of the page |
-| URL | `npx st4ck@<version> browse url -s <slug>` — get the current page URL |
-| Page errors | `npx st4ck@<version> browse page-errors -s <slug> [--no-clear]` — drain (default) or peek the buffer of uncaught exceptions thrown by the page since session start. Listener attaches before navigation, so module-load throws are caught. |
+| Snapshot | `npx st4ck@latest browse snapshot -s <slug>` — get the a11y tree of the page |
+| URL | `npx st4ck@latest browse url -s <slug>` — get the current page URL |
+| Page errors | `npx st4ck@latest browse page-errors -s <slug> [--no-clear]` — drain (default) or peek the buffer of uncaught exceptions thrown by the page since session start. Listener attaches before navigation, so module-load throws are caught. |
 
 **Multi-session** — open two browsers under different `--session` names and interleave commands:
 
 ```bash
-npx st4ck@<version> browse launch https://app.com -s alice --record --out tests/alice.md
-npx st4ck@<version> browse launch https://app.com -s bob   --record --out tests/bob.md
-npx st4ck@<version> browse click -s alice --by role --value button --name "Login"
-npx st4ck@<version> browse fill  -s bob   --by label --value "Email" --text "bob@..."
-npx st4ck@<version> browse list   # see alive vs stale sessions
+npx st4ck@latest browse launch https://app.com -s alice --record --out tests/alice.md
+npx st4ck@latest browse launch https://app.com -s bob   --record --out tests/bob.md
+npx st4ck@latest browse click -s alice --by role --value button --name "Login"
+npx st4ck@latest browse fill  -s bob   --by label --value "Email" --text "bob@..."
+npx st4ck@latest browse list   # see alive vs stale sessions
 ```
 
-Each `-s <name>` routes to its own runner + browser context. `npx st4ck@<version> browse list` enumerates active sessions.
+Each `-s <name>` routes to its own runner + browser context. `npx st4ck@latest browse list` enumerates active sessions.
 
 ### Step 2.5 — Reactive UIs (Bubble, Radix, Headless UI, MUI menus, etc.)
 
@@ -130,8 +130,8 @@ Symptom: `click` returns `status: "passed"` but the UI doesn't react. The result
 **Fix:** launch with `--platform=<v>`. The wrapper forwards the flag to the runner, which (when supported) flips per-call reactive flags (`dispatch_chain`, `dispatch_events`, `atomic`) on as defaults for the whole session.
 
 ```bash
-npx st4ck@<version> browse launch https://app.bubbleapps.io --platform=bubble -s <slug> --record --out tests/<slug>.md
-npx st4ck@<version> browse launch https://radix-app.example.com --platform=auto -s <slug> --record --out tests/<slug>.md
+npx st4ck@latest browse launch https://app.bubbleapps.io --platform=bubble -s <slug> --record --out tests/<slug>.md
+npx st4ck@latest browse launch https://radix-app.example.com --platform=auto -s <slug> --record --out tests/<slug>.md
 ```
 
 Recognized values: `auto` | `web` | `bubble` | `retool` | `webflow` | `n8n` | `wix-velo` | `glide` | `flutterflow`. With `auto`, the runner detects via response headers > DOM probes > URL pattern.
@@ -148,7 +148,7 @@ Every successful `click` returns evidence of whether the click changed page stat
 
 ### Step 3 — Strategy
 
-1. **Snapshot first.** `npx st4ck@<version> browse snapshot -s <slug>` to discover stable locators.
+1. **Snapshot first.** `npx st4ck@latest browse snapshot -s <slug>` to discover stable locators.
 2. **Use stable locators.** `testid` > `role+name` > `label`.
 3. **Wait deliberately.** After clicks that trigger navigation or modals, follow with `wait_until`.
 4. **One block, one flow.** Don't add side-quests; capture the user's stated intent.
@@ -158,16 +158,16 @@ Every successful `click` returns evidence of whether the click changed page stat
 
 ```bash
 # Saves the trace (because launch was --record), exits 0.
-npx st4ck@<version> browse close -s <slug>
+npx st4ck@latest browse close -s <slug>
 
 # OR — discard the session entirely.
-npx st4ck@<version> browse abort -s <slug> --reason "<short>"
+npx st4ck@latest browse abort -s <slug> --reason "<short>"
 ```
 
 `close` waits for the runner's `record_complete` envelope before cleaning up the session directory. The wrapper writes `tests/<slug>.md` (or wherever you set via `--out`) and exits 0. Surface a 1-line summary:
 
 ```
-Recorded N primitives in tests/<slug>.md. Replay with: npx st4ck@<version> run tests/<slug>.md
+Recorded N primitives in tests/<slug>.md. Replay with: npx st4ck@latest run tests/<slug>.md
 ```
 
 `abort` is **idempotent** — re-running it on a session that's already gone returns an `abort_noop` envelope and exits 0.
@@ -199,7 +199,7 @@ Recorded N primitives in tests/<slug>.md. Replay with: npx st4ck@<version> run t
 Replay is a separate skill — `/st4ck-lite:run <path>`:
 
 ```bash
-npx st4ck@<version> run tests/<slug>.md
+npx st4ck@latest run tests/<slug>.md
 ```
 
 Zero LLM. Pure Playwright. Reports pass/fail per block. Caller decides what to do with the verdict.

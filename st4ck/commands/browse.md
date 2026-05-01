@@ -9,7 +9,7 @@ Activates the `qa-record-test` skill. You drive a real browser one primitive at 
 
 The captured trace (when you launch with `--record`) is a deterministic markdown file in your repo. Replay it later with zero LLM cost via `/st4ck-lite:run <path>`.
 
-> **Version pin every example.** This skill writes `npx st4ck@<version>` everywhere — substitute the latest published version (`npm view st4ck version`). The plugin manifest does not pin the CLI version (no schema field for it), so the docs are the only signal. Pin in your invocations.
+> **Version.** Examples use `npx st4ck@latest` — npm always serves the current release. To pin (CI reproducibility, rollback), substitute an explicit version (e.g. `npx st4ck@0.2.0-alpha.1`); see `npm view st4ck versions` for the list.
 
 ## What to do
 
