@@ -1,6 +1,6 @@
 ---
 description: Drive a real browser one IPC primitive at a time via the `st4ck browse` CLI. Each subcommand is one Bash invocation; the wrapper hides the runner behind the scenes. Multi-session out of the box. Optional `--record` saves the trace as a deterministic md test you can replay later.
-argument-hint: <url> [--session <name>] [--record [--out <path>]] [--instruction "<text>"] [--platform=<v>] [--device "<name>"] [--viewport <WxH>] [--locale <bcp47>] [--timezone <iana>] [--color-scheme <v>] [--geolocation <lat,lon>] [--headless] [--no-blank-page-check]
+argument-hint: <url> [--session <name>] [--record [--out <path>]] [--instruction "<text>"] [--platform=<v>] [--device "<name>"] [--viewport <WxH>] [--locale <bcp47>] [--timezone-id <iana>] [--color-scheme <v>] [--reduced-motion <v>] [--geolocation <lat,lon>] [--context-options <json>] [--headless] [--no-blank-page-check]
 ---
 
 # /st4ck-lite:browse

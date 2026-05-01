@@ -47,13 +47,16 @@ For sites where viewport / touch / locale / timezone / color scheme / geolocatio
 | `--viewport "393x852"` | Standalone viewport (no UA / touch change), or override the viewport from `--device`. |
 | `--user-agent "..."` | Custom UA. Standalone or overrides `--device`'s UA. |
 | `--locale "he-IL"` | BCP 47 locale. Drives `Intl.*`, `navigator.language`, `Accept-Language`. |
-| `--timezone "Asia/Jerusalem"` | IANA timezone — drives `new Date()` and `Intl` timezone. |
+| `--timezone-id "Asia/Jerusalem"` | IANA timezone — drives `new Date()` and `Intl` timezone. Maps to Playwright's `timezoneId`. (`--timezone` is also accepted as alias for backward compat with alpha.5.) |
 | `--color-scheme dark` | One of `light` / `dark` / `no-preference`. Drives `prefers-color-scheme`. |
+| `--reduced-motion reduce` | One of `reduce` / `no-preference`. Drives `prefers-reduced-motion`. |
+| `--forced-colors active` | One of `active` / `none`. Drives the `forced-colors` media query. |
 | `--geolocation "lat,lon"` | Seeds `navigator.geolocation`. Auto-grants the geolocation permission so the prompt doesn't block. |
 | `--permissions clipboard-read,notifications` | CSV of permissions to grant via `context.grantPermissions()`. |
 | `--http-credentials "user:pass"` | HTTP Basic auth for staging environments. |
 | `--offline` | Start the context offline. |
 | `--bypass-csp` | Bypass the page's Content-Security-Policy. |
+| `--context-options '<json>'` | **Escape hatch** — raw JSON `BrowserContextOptions` blob for fields not exposed as flags (`recordVideo`, `recordHar`, `extraHTTPHeaders`, `screen`, future Playwright additions). Validated as JSON pre-spawn. Merges as the BASE layer; `--device` overrides on top; explicit named flags win last. |
 
 Composite mobile-Hebrew-Tel Aviv example:
 
@@ -62,9 +65,18 @@ npx st4ck@latest browse launch https://app.example.com \
   --session plenty-mobile --record --out tests/plenty-mobile.md \
   --device "iPhone 14 Pro" \
   --locale "he-IL" \
-  --timezone "Asia/Jerusalem" \
+  --timezone-id "Asia/Jerusalem" \
   --color-scheme dark \
   --geolocation "32.0853,34.7818"
+```
+
+Escape-hatch example for capturing video + HAR alongside iPhone emulation:
+
+```bash
+npx st4ck@latest browse launch https://app.example.com \
+  --session plenty-recorded --record --out tests/plenty-recorded.md \
+  --device "iPhone 14 Pro" \
+  --context-options '{"recordVideo":{"dir":"/tmp/v"},"recordHar":{"path":"/tmp/h.har"}}'
 ```
 
 Wrapper-side validation rejects bad strings (`--viewport foo`, `--geolocation 91,0`, etc.) in <100ms BEFORE Chromium spawns.
