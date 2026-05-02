@@ -123,7 +123,7 @@ Use `--exact` to demand string equality on `--value` (default is substring).
 | Hover | `npx st4ck@latest browse hover -s <slug> --by testid --value "tooltip-trigger"` |
 | Upload | `npx st4ck@latest browse upload -s <slug> --by testid --value "file-input" --file /abs/path/photo.jpg` (`--file` repeats for multi-file) |
 | Wait until | `npx st4ck@latest browse wait_until -s <slug> --js "document.querySelectorAll('[data-row]').length > 0" --timeout-ms 10000` |
-| Evaluate | `npx st4ck@latest browse evaluate -s <slug> --js "document.title"` |
+| Evaluate | `npx st4ck@latest browse evaluate -s <slug> --js "document.title"` — **OK/NF contract (alpha.13+):** if your JS expression returns a string starting with `"nf:"`, the action is recorded as failed with `error.class="check_failed"`. Use `return <verified> ? 'ok: <state proof>' : 'nf: <reason>'` to encode post-step assertions. Other return shapes (booleans, numbers, arbitrary strings) still pass. |
 
 **Scope** — every locator-bearing action accepts `--scope-by <kind> --scope-value <v>` to constrain the locator to a container element (e.g. `--scope-by role --scope-value dialog` to disambiguate inside a modal).
 
