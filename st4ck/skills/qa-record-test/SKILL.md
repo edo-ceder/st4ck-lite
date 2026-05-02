@@ -171,6 +171,10 @@ npx st4ck@latest browse set_viewport_size -s <slug> --viewport 360x740
 | `wait_until --by ... --value ... [--kind visible\|hidden\|attached\|detached]` | `locator.waitFor({state})` |
 | `wait_until --kind networkidle` | `page.waitForLoadState("networkidle")` |
 
+**Strict-mode uniqueness on locator-driven kinds.** `wait_until visible/hidden/attached/detached` calls Playwright's strict-mode `locator.waitFor()` — fails if the locator matches more than one element (e.g. `[data-sidebar="menu-button"]` matching 10 sidebar items). Disambiguate with a unique anchor (`a[data-sidebar="menu-button"][href="/"]`) or scope into a container. To wait on "any of N matching," use `--kind custom --js "querySelectorAll(...).length > 0"`.
+
+**Auth components must be idempotent under storage-state rehydration.** The runner snapshots `storage_state` after the first green block and rehydrates on subsequent runs. If your `/auth` page redirects authenticated users to `/`, the second-run login wait times out (form never renders). Wrap form fills in a `branch` primitive whose condition is `kind: "visible"` on the email input — `then: [fill + submit]`, `else: []` — then a unified `wait_until visible role=main` post-condition covers both branches. Without this, every replay rediscovers the bug.
+
 **Multi-session** — open two browsers under different `--session` names and interleave commands:
 
 ```bash
