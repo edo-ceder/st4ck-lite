@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "st4ck-lite-marketplace",
+  "version": "0.1.0",
+  "description": "Free + open-source Claude Code plugin for st4ck. Author tests with your AI agent. Replay them deterministically.",
+  "owner": {
+    "name": "st4ck",
+    "email": "hello@st4ck.io"
+  },
+  "plugins": [
+    {
+      "name": "st4ck-lite",
+      "description": "Record tests with your AI agent. Replay them forever, for free. Two slash commands; tests are local markdown files; no account, no key, no service.",
+      "version": "0.1.0-alpha.0",
+      "author": {
+        "name": "st4ck",
+        "email": "hello@st4ck.io"
+      },
+      "source": "./st4ck",
+      "category": "testing"
+    }
+  ]
+}

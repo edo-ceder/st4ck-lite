@@ -67,9 +67,11 @@ The runner itself is the `st4ck-runner` npm package — same binary the paid plu
 In Claude Code:
 
 ```bash
-/plugin marketplace add st4ck-lite
-/plugin install st4ck-lite
+/plugin marketplace add edo-ceder/st4ck-lite
+/plugin install st4ck-lite@st4ck-lite-marketplace
 ```
+
+Then `/reload-plugins` to activate.
 
 Or use the standalone CLI without a plugin (`@latest` always resolves to the current release):
 
