@@ -13,7 +13,7 @@ The free Claude Code plugin for st4ck. Captures agent-driven sessions as determi
 /st4ck-lite:run tests/sign-in-as-alice.md
 ```
 
-That's the whole product. Two slash commands. Two npm packages underneath (`st4ck` brand binary + the runner it wraps). Zero magic.
+That's the whole product. Three slash commands (`author` is the canonical workflow; `browse` is the primitive it's built on; `run` replays). Two npm packages underneath (`st4ck` brand binary + the runner it wraps). Zero magic.
 
 ---
 
@@ -31,7 +31,7 @@ That's the whole product. Two slash commands. Two npm packages underneath (`st4c
 
 | Capability | `st4ck-lite` (this plugin) | `st4ck` paid platform |
 |---|:---:|:---:|
-| 10-primitive IPC vocab | ✓ | ✓ |
+| Compact IPC vocab (10 actions + observation + control) | ✓ | ✓ |
 | Agent-driven recording | ✓ | ✓ |
 | Deterministic markdown replay | ✓ | ✓ |
 | Locator-priority ladder (Tier-1 self-heal) | ✓ | ✓ |
@@ -49,14 +49,16 @@ That's the whole product. Two slash commands. Two npm packages underneath (`st4c
 
 → Full platform: [st4ck.io](https://st4ck.io)
 
+For lifecycle orchestration on top of recording — `/po-research`, planning, role-separated `/implement`, debug, and diff-driven impact analysis — see the [st4ck plugin](https://github.com/edo-ceder/st4ck-plugin) (open-source code + paid workspace backend).
+
 ---
 
 ## What lives in this repo
 
-- `.claude-plugin/plugin.json` — Claude Code marketplace metadata
+- `.claude-plugin/marketplace.json` — Claude Code marketplace metadata
 - `st4ck/skills/` — record + replay skills + **PRD authoring skills** (see below)
 - `st4ck/commands/` — slash command aliases (`/st4ck-lite:author`, `/st4ck-lite:browse`, `/st4ck-lite:run`)
-- `st4ck/agents/` — recording sub-agent + **three independent PRD reviewer agents** (PO / QA / Dev angles)
+- `st4ck/agents/` — **three independent PRD reviewer agents** (PO / QA / Dev angles). The recording flow drives the `st4ck browse` CLI directly — no separate sub-agent needed.
 
 The runner itself is the `st4ck-runner` npm package — same binary the paid plugin uses. The lite plugin doesn't fork the runner; it constrains the SKILL set to what works without an `app.st4ck.io` connection.
 
