@@ -19,7 +19,7 @@ That's the whole product. Three slash commands (`author` is the canonical workfl
 
 ## Three beats
 
-**1. Agent ergonomics.** A focused IPC vocabulary — actions (`navigate`, `click`, `fill`, `press`, `select`, `check_box`, `hover`, `upload`, `wait_until`, `evaluate`), text-based disambiguation (`click_by_text`, `hover_by_text`, `type_by_text`), conditional dispatch (`branch`), observation (`snapshot`, `url`), control (`continue`, `abort`) — over line-delimited JSON on stdin/stdout. Per-call opt-in flags (`dispatch_chain`, `dispatch_events`, `atomic`) handle no-code platform runtimes (Bubble, Retool, Webflow, n8n, Wix Velo, Glide, FlutterFlow). Your agent already drives a browser; this is the smallest surface that lets it.
+**1. Agent ergonomics.** A focused IPC vocabulary — actions (`navigate`, `click`, `fill`, `press`, `select`, `check_box`, `hover`, `upload`, `wait_until`, `evaluate`), text-based disambiguation (`click_by_text`, `hover_by_text`, `type_by_text`), conditional dispatch (`branch`), observation (`snapshot`, `url`), control (`continue`, `abort`) — over line-delimited JSON on stdin/stdout. Per-call opt-in flags (`dispatch_chain`, `dispatch_events`, `atomic`) handle no-code platform runtimes. **Supported today:** open web apps + Bubble. **On demand:** other closed-source no-code runtimes (Retool, Webflow, n8n, Wix Velo, Glide, FlutterFlow, etc.) ship when an alpha user asks. Your agent already drives a browser; this is the smallest surface that lets it.
 
 **2. Authoring-by-use.** Your agent isn't writing a test — it's using the site. The recording **is** the test. Walk through the flow once; you get a markdown file you can rerun, version, share.
 
@@ -50,6 +50,20 @@ That's the whole product. Three slash commands (`author` is the canonical workfl
 → Full platform: [st4ck.io](https://st4ck.io)
 
 For lifecycle orchestration on top of recording — `/po-research`, planning, role-separated `/implement`, debug, and diff-driven impact analysis — see the [st4ck plugin](https://github.com/edo-ceder/st4ck-plugin) (open-source code + paid workspace backend).
+
+---
+
+## How is this different from Playwright wrappers / agent-browser / Stagehand?
+
+`st4ck browse` isn't a Playwright fork or another general-purpose browser-driving wrapper. It's purpose-built for **recording → deterministic replay**. Three load-bearing differences:
+
+**1. The recording IS the test.** Most browser-driving tools (agent-browser, Stagehand, Playwright MCP, browser-use, etc.) drive a browser ad-hoc — every rerun re-prompts the LLM, re-pays per call, re-tolerates non-determinism. `st4ck browse --record` writes a markdown file you commit to your repo and replay forever with zero LLM calls.
+
+**2. One primitive per Bash call — no LLM abstraction layer.** Stagehand-style tools sit behind a "describe-your-intent" prompt that the tool re-translates each run. `st4ck browse` exposes a stable IPC vocabulary the agent invokes one verb at a time. That's what makes the recording deterministic: the trace is a sequence of typed primitives, not freeform intent that needs re-translation on every replay.
+
+**3. Designed for no-code runtimes.** Per-call dispatch flags (`dispatch_chain`, `dispatch_events`, `atomic`) handle Bubble-style synthesized-event models out of the box. Most general-purpose wrappers either bake in a per-platform mode or punt to manual workarounds.
+
+**vs `agent-browser` specifically:** agent-browser is excellent at general-purpose browser automation — fill this form, scrape that data, take a screenshot, dogfood that site. `st4ck browse` is purpose-built for one job: produce a deterministic md test file you can rerun forever for free. Different jobs; both can coexist in the same agent's toolbox.
 
 ---
 
