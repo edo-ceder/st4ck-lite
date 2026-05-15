@@ -54,11 +54,24 @@ That's the whole product. Two slash commands. Two npm packages underneath (`st4c
 ## What lives in this repo
 
 - `.claude-plugin/plugin.json` — Claude Code marketplace metadata
-- `st4ck/skills/` — record + replay skills (the open subset of methodology)
+- `st4ck/skills/` — record + replay skills + **PRD authoring skills** (see below)
 - `st4ck/commands/` — slash command aliases (`/st4ck-lite:author`, `/st4ck-lite:browse`, `/st4ck-lite:run`)
-- `st4ck/agents/` — recording sub-agent (uses local md files; no MCP key)
+- `st4ck/agents/` — recording sub-agent + **three independent PRD reviewer agents** (PO / QA / Dev angles)
 
 The runner itself is the `st4ck-runner` npm package — same binary the paid plugin uses. The lite plugin doesn't fork the runner; it constrains the SKILL set to what works without an `app.st4ck.io` connection.
+
+## PRD authoring (bundled)
+
+Two complementary skills ship with the plugin for reverse-engineering Product Requirements Documents from existing codebases or unpacked low-code exports. Useful when a platform has been live for a while and the test/spec layer needs an intent anchor.
+
+| Skill | Purpose |
+|---|---|
+| `prd-from-source` | Author a PRD by reading source code rather than asking the user. Four iron rules (code is the spec; cite sources with attestation; memory is hint not truth; subagents must attest). Phase 0 preliminaries check `get_project_users` when connected, or ask the user for the role anchor + extra docs. Two-pass mechanical-scaffold + curated-intent approach with audience triple-target (non-technical / QA / dev). |
+| `prd-review` | Four-phase review pipeline — self-review → 3 parallel independent reviewers (PO / QA / Dev) → known-gaps-vs-code → bug-routing to dev tasks. Converges on diminishing returns. |
+
+Three reviewer subagents (`prd-reviewer-po`, `prd-reviewer-qa`, `prd-reviewer-dev`) encode each angle as a stable agent type so the review loop is consistent across sessions.
+
+The skills are project-agnostic: any source-grounded PRD authored under the conventional `docs/prd/` shape works. No `app.st4ck.io` connection required — they operate on local files.
 
 ---
 
