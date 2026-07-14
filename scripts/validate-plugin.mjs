@@ -161,7 +161,7 @@ function shellTokens(command, label) {
       || /`/.test(expandableSegment)
       || /%[^%]+%/.test(expandableSegment)
       || /![^!]+!/.test(expandableSegment)
-      || (mode === "unquoted" && /[{}<>();&|]/.test(controlSegment))) {
+      || (mode === "unquoted" && /[{}<>();&|*?\[]/.test(controlSegment))) {
       mayExpand = true;
     }
     if (commandSubstitution || shellControl) mayExecute = true;
@@ -389,6 +389,14 @@ function runValidatorSelfTests() {
     "st4ck browse upload --file 'fixtures/price;1.png'",
   );
   validateBrowseSafety(
+    "single-quoted glob literal fixture",
+    "st4ck browse upload --file 'fixtures/*.png'",
+  );
+  validateBrowseSafety(
+    "escaped glob literal fixture",
+    String.raw`st4ck browse upload --file fixtures/\*.png`,
+  );
+  validateBrowseSafety(
     "documentation placeholder fixture",
     "st4ck browse launch <url> --session <slug>",
   );
@@ -476,6 +484,21 @@ function runValidatorSelfTests() {
   expectValidationFailure(
     "CMD delayed expansion upload fixture",
     String.raw`st4ck browse upload --file !TEMP!\fixture.png`,
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "glob upload fixture",
+    "st4ck browse upload --file fixtures/*.png",
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "question-mark glob screenshot fixture",
+    "st4ck browse screenshot --out artifacts/page?.png",
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "bracket glob upload fixture",
+    "st4ck browse upload --file fixtures/[ab].png",
     /upload --file path outside/,
   );
   expectValidationFailure(
