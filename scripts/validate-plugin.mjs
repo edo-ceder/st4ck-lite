@@ -196,7 +196,7 @@ function commandFlagValues(tokens, flag, label, command) {
   for (let index = 0; index < tokens.length; index += 1) {
     if (tokens[index] === flag) {
       const value = tokens[index + 1];
-      check(value && !value.startsWith("--"),
+      check(value !== undefined && value.length > 0,
         `${label} contains ${flag} without a path value: ${command}`);
       values.push(value);
       index += 1;
@@ -211,6 +211,8 @@ function commandFlagValues(tokens, flag, label, command) {
 
 function escapesDefaultRepositoryRoot(value) {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return true;
+  if (/^[A-Za-z]:/.test(value)) return true;
+  if (/^~/.test(value) || /[$`]/.test(value) || /%[^%]+%/.test(value)) return true;
   let depth = 0;
   for (const component of value.split(/[\\/]+/)) {
     if (!component || component === ".") continue;
@@ -315,6 +317,10 @@ function runValidatorSelfTests() {
   check(extracted[0].includes('--out "artifacts/page shot.png"'),
     "Browse command extraction self-test did not join a continued command");
   validateBrowseSafety("repository-relative path fixture", extractionFixture);
+  validateBrowseSafety(
+    "dash-prefixed relative filename fixture",
+    "st4ck browse screenshot --out --trace.png",
+  );
 
   expectValidationFailure(
     "fenced npx locator fixture",
@@ -344,6 +350,26 @@ function runValidatorSelfTests() {
   expectValidationFailure(
     "parent traversal upload fixture",
     "st4ck browse upload --file ../../outside/fixture.png",
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "tilde screenshot fixture",
+    "st4ck browse screenshot --out ~/page.png",
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "environment upload fixture",
+    "st4ck browse upload --file $HOME/fixture.png",
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "Windows environment upload fixture",
+    String.raw`st4ck browse upload --file %TEMP%\fixture.png`,
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "Windows drive-relative upload fixture",
+    String.raw`st4ck browse upload --file C:tmp\fixture.png`,
     /upload --file path outside/,
   );
 }
