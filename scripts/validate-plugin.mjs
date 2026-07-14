@@ -146,15 +146,28 @@ function extractBrowseCommands(text) {
 
 function shellTokens(command, label) {
   const tokens = [];
-  let token = "";
+  let value = "";
   let tokenStarted = false;
   let quote = null;
+  let expandableSegment = "";
+  let mayExpand = false;
+
+  const flushExpandableSegment = () => {
+    if (/\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!_-]|\{|\()/.test(expandableSegment)
+      || /`/.test(expandableSegment)
+      || /%[^%]+%/.test(expandableSegment)) {
+      mayExpand = true;
+    }
+    expandableSegment = "";
+  };
 
   const pushToken = () => {
     if (!tokenStarted) return;
-    tokens.push(token);
-    token = "";
+    flushExpandableSegment();
+    tokens.push({ value, mayExpand });
+    value = "";
     tokenStarted = false;
+    mayExpand = false;
   };
 
   for (let index = 0; index < command.length; index += 1) {
@@ -165,9 +178,11 @@ function shellTokens(command, label) {
         quote = null;
       } else {
         // Preserve backslashes so path.win32 can recognize quoted Windows
-        // drive and UNC paths. Browse examples do not need shell expansion.
-        token += character;
+        // drive and UNC paths while tracking double-quoted expansion syntax.
+        value += character;
+        if (quote === '"') expandableSegment += character;
       }
+      if (!quote) flushExpandableSegment();
       tokenStarted = true;
       continue;
     }
@@ -176,12 +191,15 @@ function shellTokens(command, label) {
       // An unquoted # at a shell token boundary starts an inline comment.
       break;
     } else if (character === "'" || character === '"') {
+      flushExpandableSegment();
       quote = character;
       tokenStarted = true;
     } else if (/\s/.test(character)) {
       pushToken();
     } else {
-      token += character;
+      if (!tokenStarted && character === "~") mayExpand = true;
+      value += character;
+      expandableSegment += character;
       tokenStarted = true;
     }
   }
@@ -194,25 +212,27 @@ function shellTokens(command, label) {
 function commandFlagValues(tokens, flag, label, command) {
   const values = [];
   for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index] === flag) {
-      const value = tokens[index + 1];
-      check(value !== undefined && value.length > 0,
+    if (tokens[index].value === flag) {
+      const valueToken = tokens[index + 1];
+      check(valueToken !== undefined && valueToken.value.length > 0,
         `${label} contains ${flag} without a path value: ${command}`);
-      values.push(value);
+      check(!valueToken.value.startsWith("--") || /[./\\]/.test(valueToken.value.slice(2)),
+        `${label} contains ${flag} without a path value: ${command}`);
+      values.push(valueToken);
       index += 1;
-    } else if (tokens[index].startsWith(`${flag}=`)) {
-      const value = tokens[index].slice(flag.length + 1);
+    } else if (tokens[index].value.startsWith(`${flag}=`)) {
+      const value = tokens[index].value.slice(flag.length + 1);
       check(value.length > 0, `${label} contains ${flag}= without a path value: ${command}`);
-      values.push(value);
+      values.push({ value, mayExpand: tokens[index].mayExpand });
     }
   }
   return values;
 }
 
-function escapesDefaultRepositoryRoot(value) {
+function escapesDefaultRepositoryRoot({ value, mayExpand }) {
+  if (mayExpand) return true;
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return true;
   if (/^[A-Za-z]:/.test(value)) return true;
-  if (/^~/.test(value) || /[$`]/.test(value) || /%[^%]+%/.test(value)) return true;
   let depth = 0;
   for (const component of value.split(/[\\/]+/)) {
     if (!component || component === ".") continue;
@@ -246,8 +266,8 @@ const standardLocatorOps = new Set([
 function validateBrowseSafety(surfaceName, surface) {
   for (const command of extractBrowseCommands(surface)) {
     const tokens = shellTokens(command, surfaceName);
-    const browseIndex = tokens.indexOf("browse");
-    const op = tokens[browseIndex + 1];
+    const browseIndex = tokens.findIndex((token) => token.value === "browse");
+    const op = tokens[browseIndex + 1]?.value;
     check(browseIndex >= 0,
       `${surfaceName} contains a malformed Browse command: ${command}`);
     if (!op) continue;
@@ -273,9 +293,9 @@ function validateBrowseSafety(surfaceName, surface) {
         ? ["--file"]
         : [];
     for (const flag of pathFlags) {
-      for (const value of commandFlagValues(tokens, flag, surfaceName, command)) {
-        check(!escapesDefaultRepositoryRoot(value),
-          `${surfaceName} teaches a ${op} ${flag} path outside the default allowed repository root: ${value}`);
+      for (const valueToken of commandFlagValues(tokens, flag, surfaceName, command)) {
+        check(!escapesDefaultRepositoryRoot(valueToken),
+          `${surfaceName} teaches a ${op} ${flag} path outside the default allowed repository root: ${valueToken.value}`);
       }
     }
   }
@@ -321,7 +341,16 @@ function runValidatorSelfTests() {
     "dash-prefixed relative filename fixture",
     "st4ck browse screenshot --out --trace.png",
   );
+  validateBrowseSafety(
+    "single-quoted literal filename fixture",
+    "st4ck browse upload --file 'fixtures/price$1.png'",
+  );
 
+  expectValidationFailure(
+    "missing screenshot path fixture",
+    "st4ck browse screenshot --out --full-page",
+    /without a path value/,
+  );
   expectValidationFailure(
     "fenced npx locator fixture",
     "```bash\nnpx st4ck@latest browse click --by role --value button\n```",
