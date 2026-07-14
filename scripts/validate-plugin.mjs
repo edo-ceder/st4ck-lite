@@ -151,38 +151,54 @@ function shellTokens(command, label) {
   let quote = null;
   let expandableSegment = "";
   let mayExpand = false;
+  let mayExecute = false;
 
-  const flushExpandableSegment = () => {
-    if (/\$(?:[A-Za-z_][A-Za-z0-9_]*|[0-9@*#?$!_-]|\{|\()/.test(expandableSegment)
+  const flushExpandableSegment = (mode = "unquoted") => {
+    const controlSegment = expandableSegment.replace(/<[a-z][a-z0-9_-]*>/gi, "");
+    const commandSubstitution = /\$\(|`/.test(expandableSegment);
+    const shellControl = mode === "unquoted" && /[<>();&|]/.test(controlSegment);
+    if (/\$/.test(expandableSegment)
       || /`/.test(expandableSegment)
-      || /%[^%]+%/.test(expandableSegment)) {
+      || /%[^%]+%/.test(expandableSegment)
+      || /![^!]+!/.test(expandableSegment)
+      || (mode === "unquoted" && /[{}<>();&|]/.test(controlSegment))) {
       mayExpand = true;
     }
+    if (commandSubstitution || shellControl) mayExecute = true;
     expandableSegment = "";
   };
 
   const pushToken = () => {
     if (!tokenStarted) return;
     flushExpandableSegment();
-    tokens.push({ value, mayExpand });
+    tokens.push({ value, mayExpand, mayExecute });
     value = "";
     tokenStarted = false;
     mayExpand = false;
+    mayExecute = false;
   };
 
   for (let index = 0; index < command.length; index += 1) {
     const character = command[index];
 
     if (quote) {
-      if (character === quote) {
+      if (quote === '"' && character === "\\" && index + 1 < command.length
+        && /[$`"\\\n]/.test(command[index + 1])) {
+        // Preserve the path spelling for cross-platform checks, but do not
+        // treat a shell-escaped metacharacter as executable expansion syntax.
+        flushExpandableSegment("double");
+        value += character + command[index + 1];
+        index += 1;
+      } else if (character === quote) {
+        const closedQuote = quote;
         quote = null;
+        if (closedQuote === '"') flushExpandableSegment("double");
       } else {
         // Preserve backslashes so path.win32 can recognize quoted Windows
         // drive and UNC paths while tracking double-quoted expansion syntax.
         value += character;
         if (quote === '"') expandableSegment += character;
       }
-      if (!quote) flushExpandableSegment();
       tokenStarted = true;
       continue;
     }
@@ -191,8 +207,16 @@ function shellTokens(command, label) {
       // An unquoted # at a shell token boundary starts an inline comment.
       break;
     } else if (character === "'" || character === '"') {
-      flushExpandableSegment();
+      if (expandableSegment.endsWith("$")) mayExpand = true;
+      flushExpandableSegment("unquoted");
       quote = character;
+      tokenStarted = true;
+    } else if (character === "\\" && index + 1 < command.length) {
+      // Keep backslashes so Windows absolute/traversal checks still see them,
+      // while separating an escaped metacharacter from expandable syntax.
+      flushExpandableSegment("unquoted");
+      value += character + command[index + 1];
+      index += 1;
       tokenStarted = true;
     } else if (/\s/.test(character)) {
       pushToken();
@@ -216,7 +240,8 @@ function commandFlagValues(tokens, flag, label, command) {
       const valueToken = tokens[index + 1];
       check(valueToken !== undefined && valueToken.value.length > 0,
         `${label} contains ${flag} without a path value: ${command}`);
-      check(!valueToken.value.startsWith("--") || /[./\\]/.test(valueToken.value.slice(2)),
+      check(!valueToken.value.startsWith("-")
+        || /[./\\]/.test(valueToken.value.replace(/^-+/, "")),
         `${label} contains ${flag} without a path value: ${command}`);
       values.push(valueToken);
       index += 1;
@@ -270,6 +295,8 @@ function validateBrowseSafety(surfaceName, surface) {
     const op = tokens[browseIndex + 1]?.value;
     check(browseIndex >= 0,
       `${surfaceName} contains a malformed Browse command: ${command}`);
+    check(tokens.every((token) => !token.mayExecute),
+      `${surfaceName} contains executable shell expansion or control syntax: ${command}`);
     if (!op) continue;
     check(!/(?:^|\s)--by(?=\s|=|`)/.test(command),
       `${surfaceName} contains deprecated --by locator guidance: ${command}`);
@@ -345,10 +372,35 @@ function runValidatorSelfTests() {
     "single-quoted literal filename fixture",
     "st4ck browse upload --file 'fixtures/price$1.png'",
   );
+  validateBrowseSafety(
+    "escaped literal filename fixture",
+    String.raw`st4ck browse upload --file fixtures/\$HOME.png`,
+  );
+  validateBrowseSafety(
+    "double-quoted escaped literal filename fixture",
+    String.raw`st4ck browse upload --file "fixtures/\$HOME.png"`,
+  );
+  validateBrowseSafety(
+    "explicit equals dash filename fixture",
+    "st4ck browse screenshot --out=-h",
+  );
+  validateBrowseSafety(
+    "single-quoted control literal fixture",
+    "st4ck browse upload --file 'fixtures/price;1.png'",
+  );
+  validateBrowseSafety(
+    "documentation placeholder fixture",
+    "st4ck browse launch <url> --session <slug>",
+  );
 
   expectValidationFailure(
     "missing screenshot path fixture",
     "st4ck browse screenshot --out --full-page",
+    /without a path value/,
+  );
+  expectValidationFailure(
+    "short option missing screenshot path fixture",
+    "st4ck browse screenshot --out -h",
     /without a path value/,
   );
   expectValidationFailure(
@@ -400,6 +452,46 @@ function runValidatorSelfTests() {
     "Windows drive-relative upload fixture",
     String.raw`st4ck browse upload --file C:tmp\fixture.png`,
     /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "brace expansion screenshot fixture",
+    "st4ck browse screenshot --out {..,fixtures}/outside.png",
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "mixed-quote brace expansion screenshot fixture",
+    'st4ck browse screenshot --out {..,"fixtures"}/outside.png',
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "ANSI-C quoted screenshot fixture",
+    "st4ck browse screenshot --out $'../outside.png'",
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "process substitution screenshot fixture",
+    "st4ck browse screenshot --out <(printf-fixture)",
+    /executable shell expansion or control syntax/,
+  );
+  expectValidationFailure(
+    "CMD delayed expansion upload fixture",
+    String.raw`st4ck browse upload --file !TEMP!\fixture.png`,
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "shell redirection fixture",
+    "st4ck browse screenshot --out artifacts/x.png > ../outside.txt",
+    /executable shell expansion or control syntax/,
+  );
+  expectValidationFailure(
+    "non-path command substitution fixture",
+    "st4ck browse screenshot --out artifacts/x.png $(touch ../outside)",
+    /executable shell expansion or control syntax/,
+  );
+  expectValidationFailure(
+    "empty operation redirection fixture",
+    'st4ck browse "" > ../outside.txt',
+    /executable shell expansion or control syntax/,
   );
 }
 
