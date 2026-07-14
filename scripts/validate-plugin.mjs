@@ -113,15 +113,26 @@ function validateFrontmatter(text, label) {
   }
 }
 
+const browseCommandStart = /^(?:\$\s*)?(?:(?:npx(?:\s+(?:-y|--yes))?\s+st4ck(?:@[^\s]+)?)|st4ck)\s+browse\b/;
+
 function extractBrowseCommands(text) {
   const lines = text.split("\n");
   const commands = [];
+  let inFence = false;
 
   for (let index = 0; index < lines.length; index += 1) {
-    const start = lines[index].indexOf("npx ");
-    if (start < 0 || !/\bbrowse\b/.test(lines[index].slice(start))) continue;
+    const trimmed = lines[index].trim();
+    if (/^```/.test(trimmed)) {
+      inFence = !inFence;
+      continue;
+    }
 
-    let command = lines[index].slice(start).trim();
+    // Outside a fence, only a command-start line is executable guidance.
+    // Inside one, also accept the conventional "$ " shell-prompt prefix.
+    const candidate = inFence ? trimmed.replace(/^\$\s*/, "") : trimmed;
+    if (!browseCommandStart.test(candidate)) continue;
+
+    let command = candidate;
     while (/\\\s*$/.test(command) && index + 1 < lines.length) {
       command = command.replace(/\\\s*$/, " ");
       index += 1;
@@ -131,6 +142,86 @@ function extractBrowseCommands(text) {
   }
 
   return commands;
+}
+
+function shellTokens(command, label) {
+  const tokens = [];
+  let token = "";
+  let tokenStarted = false;
+  let quote = null;
+
+  const pushToken = () => {
+    if (!tokenStarted) return;
+    tokens.push(token);
+    token = "";
+    tokenStarted = false;
+  };
+
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index];
+
+    if (quote) {
+      if (character === quote) {
+        quote = null;
+      } else {
+        // Preserve backslashes so path.win32 can recognize quoted Windows
+        // drive and UNC paths. Browse examples do not need shell expansion.
+        token += character;
+      }
+      tokenStarted = true;
+      continue;
+    }
+
+    if (character === "#" && !tokenStarted) {
+      // An unquoted # at a shell token boundary starts an inline comment.
+      break;
+    } else if (character === "'" || character === '"') {
+      quote = character;
+      tokenStarted = true;
+    } else if (/\s/.test(character)) {
+      pushToken();
+    } else {
+      token += character;
+      tokenStarted = true;
+    }
+  }
+
+  check(!quote, `${label} contains an unterminated quoted Browse command: ${command}`);
+  pushToken();
+  return tokens;
+}
+
+function commandFlagValues(tokens, flag, label, command) {
+  const values = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index] === flag) {
+      const value = tokens[index + 1];
+      check(value && !value.startsWith("--"),
+        `${label} contains ${flag} without a path value: ${command}`);
+      values.push(value);
+      index += 1;
+    } else if (tokens[index].startsWith(`${flag}=`)) {
+      const value = tokens[index].slice(flag.length + 1);
+      check(value.length > 0, `${label} contains ${flag}= without a path value: ${command}`);
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+function escapesDefaultRepositoryRoot(value) {
+  if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) return true;
+  let depth = 0;
+  for (const component of value.split(/[\\/]+/)) {
+    if (!component || component === ".") continue;
+    if (component === "..") {
+      if (depth === 0) return true;
+      depth -= 1;
+    } else {
+      depth += 1;
+    }
+  }
+  return false;
 }
 
 function markdownFiles(relativeDir) {
@@ -152,7 +243,12 @@ const standardLocatorOps = new Set([
 
 function validateBrowseSafety(surfaceName, surface) {
   for (const command of extractBrowseCommands(surface)) {
-    const op = /\bbrowse\s+(\S+)/.exec(command)?.[1];
+    const tokens = shellTokens(command, surfaceName);
+    const browseIndex = tokens.indexOf("browse");
+    const op = tokens[browseIndex + 1];
+    check(browseIndex >= 0,
+      `${surfaceName} contains a malformed Browse command: ${command}`);
+    if (!op) continue;
     check(!/(?:^|\s)--by(?=\s|=|`)/.test(command),
       `${surfaceName} contains deprecated --by locator guidance: ${command}`);
     check(!/(?:^|\s)--quiet(?=\s|$|`)/.test(command),
@@ -169,6 +265,17 @@ function validateBrowseSafety(surfaceName, surface) {
       check(!/(?:^|\s)(?:--locator-by|--locator-value|--text|--option-label)\b/.test(command),
         `${surfaceName} teaches invalid ${op} flags: ${command}`);
     }
+    const pathFlags = op === "screenshot"
+      ? ["--out"]
+      : op === "upload"
+        ? ["--file"]
+        : [];
+    for (const flag of pathFlags) {
+      for (const value of commandFlagValues(tokens, flag, surfaceName, command)) {
+        check(!escapesDefaultRepositoryRoot(value),
+          `${surfaceName} teaches a ${op} ${flag} path outside the default allowed repository root: ${value}`);
+      }
+    }
   }
 
   check(!/\bxpath\b/i.test(surface),
@@ -177,13 +284,71 @@ function validateBrowseSafety(surfaceName, surface) {
     `${surfaceName} presents launch --platform as today's reactive-UI fix`);
   check(!/\$SB_TOKEN|browse launch[^\n]*--local-storage|--local-storage[^\n]*sb-[^\n]*auth-token/i.test(surface),
     `${surfaceName} passes or recommends passing an auth token in process arguments`);
-  check(!/browse screenshot[^\n]*--out\s+\/tmp\//i.test(surface),
-    `${surfaceName} teaches a screenshot path outside the default allowed repository root`);
-  check(!/browse upload[^\n]*--file\s+\/(?:abs|tmp)\//i.test(surface),
-    `${surfaceName} teaches an upload path outside the default allowed repository root`);
   check(!/don't author components|component layer[^.\n]*(?:paid|full)/i.test(surface),
     `${surfaceName} incorrectly makes all component authoring paid-only`);
 }
+
+function expectValidationFailure(label, surface, expectedMessage) {
+  let failure;
+  try {
+    validateBrowseSafety(label, surface);
+  } catch (error) {
+    failure = error;
+  }
+  check(failure instanceof Error && expectedMessage.test(failure.message),
+    `${label} self-test did not fail as expected`);
+}
+
+function runValidatorSelfTests() {
+  const extractionFixture = [
+    "Prose mentioning `npx st4ck@latest browse click --by text` is not a command.",
+    "```bash",
+    "npx -y st4ck@latest browse screenshot \\",
+    "  --out \"artifacts/page shot.png\"",
+    "$ st4ck browse upload --file 'fixtures/photo one.jpg'",
+    "```",
+    "st4ck browse screenshot --out=artifacts/summary.png",
+  ].join("\n");
+  const extracted = extractBrowseCommands(extractionFixture);
+  check(extracted.length === 3,
+    `Browse command extraction self-test expected 3 commands, got ${extracted.length}`);
+  check(extracted[0].includes('--out "artifacts/page shot.png"'),
+    "Browse command extraction self-test did not join a continued command");
+  validateBrowseSafety("repository-relative path fixture", extractionFixture);
+
+  expectValidationFailure(
+    "fenced npx locator fixture",
+    "```bash\nnpx st4ck@latest browse click --by role --value button\n```",
+    /deprecated --by locator guidance/,
+  );
+  expectValidationFailure(
+    "bare locator fixture",
+    "st4ck browse click --by role --value button",
+    /deprecated --by locator guidance/,
+  );
+  expectValidationFailure(
+    "POSIX screenshot fixture",
+    "```bash\nnpx st4ck@latest browse screenshot --out \"/var/tmp/page.png\"\n```",
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "Windows screenshot fixture",
+    String.raw`st4ck browse screenshot --out="C:\Users\tester\page.png"`,
+    /screenshot --out path outside/,
+  );
+  expectValidationFailure(
+    "Windows UNC upload fixture",
+    String.raw`st4ck browse upload --file '\\server\share\fixture.png'`,
+    /upload --file path outside/,
+  );
+  expectValidationFailure(
+    "parent traversal upload fixture",
+    "st4ck browse upload --file ../../outside/fixture.png",
+    /upload --file path outside/,
+  );
+}
+
+runValidatorSelfTests();
 
 const allowedMarketplaceKeys = new Set(["name", "owner", "metadata", "plugins"]);
 const unknownMarketplaceKeys = Object.keys(marketplace).filter((key) => !allowedMarketplaceKeys.has(key));
