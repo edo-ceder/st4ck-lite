@@ -11,7 +11,7 @@ Replays an md test file via the `st4ck` brand binary — pure Playwright executi
 npx st4ck@latest run <file.md> [--headless]
 ```
 
-`@latest` resolves to the current release at invocation time. Pin to an explicit version (e.g. `npx st4ck@0.2.0-alpha.1`) only when reproducibility matters.
+`@latest` resolves to the current release at invocation time. When reproducibility matters, choose an explicit published version from `npm view st4ck versions` instead of copying a version from this skill.
 
 ## What to do
 
