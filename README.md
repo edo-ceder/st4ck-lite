@@ -4,7 +4,7 @@
 
 `st4ck-lite` is the free, open-source, local surface of st4ck. It teaches an agent to drive `st4ck browse`, save the verified primitive trace as Markdown in the repository, and replay it deterministically with `st4ck run`. No st4ck account, API key, or hosted workspace is required.
 
-The repository ships a Claude Code plugin plus a checked-in Codex Browse skill source. Both use the same public `st4ck` CLI and `st4ck-runner` packages.
+The repository ships native Claude Code and Codex plugins. Both use the same public `st4ck` CLI and `st4ck-runner` packages.
 
 ## Quick start
 
@@ -19,6 +19,22 @@ In Claude Code:
 /st4ck-lite:run tests/sign-in-as-alice-and-verify-the-dashboard-loads.md
 ```
 
+In Codex:
+
+```bash
+codex plugin marketplace add https://github.com/edo-ceder/st4ck-lite.git
+codex plugin add st4ck-lite@st4ck-lite-marketplace
+```
+
+To update an existing Codex installation:
+
+```bash
+codex plugin marketplace upgrade st4ck-lite-marketplace
+codex plugin add st4ck-lite@st4ck-lite-marketplace
+```
+
+Start a fresh Codex task after installing or updating the plugin so Codex loads the current skill metadata. Invoke the browser workflow explicitly with `$st4ck-browse`.
+
 Without a plugin, any coding agent that can run shell commands can use the CLI:
 
 ```bash
@@ -27,8 +43,6 @@ npx st4ck@latest browse --help
 # The agent reads .st4ck/session.md, drives the browser, proves the outcome, and closes the recording.
 npx st4ck@latest run tests/sign-in-as-alice-and-verify-the-dashboard-loads.md
 ```
-
-For Codex, the durable skill source is [`codex/skills/st4ck-browse/SKILL.md`](codex/skills/st4ck-browse/SKILL.md). Install or synchronize it to `$CODEX_HOME/skills/st4ck-browse/SKILL.md` (normally `~/.codex/skills/st4ck-browse/SKILL.md`), then start a fresh Codex task so the skill list reloads.
 
 ## What ships now
 
@@ -100,16 +114,18 @@ For reactive controls, the skill uses an explicit escalation: ordinary `click`, 
 ## Repository layout
 
 - `.claude-plugin/marketplace.json` — Claude marketplace catalog.
-- `st4ck/.claude-plugin/plugin.json` — the single plugin-version source.
+- `.agents/plugins/marketplace.json` — Codex marketplace catalog.
+- `st4ck/.claude-plugin/plugin.json` — Claude plugin manifest.
 - `st4ck/commands/` — `/st4ck-lite:author`, `/st4ck-lite:browse`, and `/st4ck-lite:run`.
 - `st4ck/skills/qa-record-test/` — canonical Claude recording procedure.
 - `st4ck/skills/prd-*` and `st4ck/agents/` — local PRD authoring/review workflow.
-- `codex/skills/st4ck-browse/` — checked-in Codex Browse skill source.
+- `plugins/st4ck-lite/.codex-plugin/plugin.json` — Codex plugin manifest.
+- `plugins/st4ck-lite/skills/st4ck-browse/` — native Codex Browse skill and UI metadata.
 - `scripts/validate-plugin.mjs` — manifest, version, and cross-surface Browse drift checks.
 
 ## Versioning and validation
 
-The Claude plugin version is declared only in `st4ck/.claude-plugin/plugin.json`; the marketplace entry must not declare a competing plugin version. The npm CLI is versioned separately. When reproducibility requires a pinned CLI, choose an explicit published version from `npm view st4ck versions` instead of copying a pin from these docs.
+The Claude and Codex plugin manifests declare the same release version; neither marketplace entry declares a competing plugin version. The npm CLI is versioned separately. When reproducibility requires a pinned CLI, choose an explicit published version from `npm view st4ck versions` instead of copying a pin from these docs.
 
 Before publishing a plugin change:
 
@@ -121,6 +137,6 @@ node scripts/validate-plugin.mjs
 
 ## Status
 
-`0.2.0-alpha.1`. Public alpha. Browser operation names and skill guidance can still evolve; use per-operation runtime help for the installed CLI contract.
+`0.2.0-alpha.2`. Public alpha. Browser operation names and skill guidance can still evolve; use per-operation runtime help for the installed CLI contract.
 
 License: Apache-2.0.

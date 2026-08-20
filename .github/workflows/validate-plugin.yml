@@ -4,7 +4,9 @@ on:
   pull_request:
     paths:
       - ".claude-plugin/**"
+      - ".agents/plugins/**"
       - "st4ck/**"
+      - "plugins/st4ck-lite/**"
       - "codex/**"
       - "scripts/validate-plugin.mjs"
       - "README.md"
@@ -14,7 +16,9 @@ on:
       - main
     paths:
       - ".claude-plugin/**"
+      - ".agents/plugins/**"
       - "st4ck/**"
+      - "plugins/st4ck-lite/**"
       - "codex/**"
       - "scripts/validate-plugin.mjs"
       - "README.md"
@@ -40,13 +44,24 @@ jobs:
       - name: Install Claude Code validator
         run: npm install --global @anthropic-ai/claude-code@2.1.78
 
-      - name: Validate marketplace and plugin manifests
+      - name: Install Codex CLI validator
+        run: npm install --global @openai/codex@0.148.0
+
+      - name: Validate Claude marketplace and plugin manifests
         run: |
           claude plugin validate .
           claude plugin validate st4ck
 
-      - name: Validate version and Browse contracts
+      - name: Validate native Codex packaging, versions, and Browse contracts
         run: node scripts/validate-plugin.mjs
+
+      - name: Exercise native Codex marketplace installation
+        env:
+          CODEX_HOME: ${{ runner.temp }}/st4ck-codex-home
+        run: |
+          mkdir -p "$CODEX_HOME"
+          codex plugin marketplace add "$GITHUB_WORKSPACE" --json
+          codex plugin add st4ck-lite@st4ck-lite-marketplace --json
 
       - name: Check patch whitespace
         run: git diff --check "$ST4CK_LITE_BASE_REF"...HEAD

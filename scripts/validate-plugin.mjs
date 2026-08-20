@@ -8,15 +8,22 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const baseRef = process.env.ST4CK_LITE_BASE_REF ?? "origin/main";
 const manifestPath = "st4ck/.claude-plugin/plugin.json";
+const codexManifestPath = "plugins/st4ck-lite/.codex-plugin/plugin.json";
+const codexSkillPath = "plugins/st4ck-lite/skills/st4ck-browse/SKILL.md";
+const codexAgentPath = "plugins/st4ck-lite/skills/st4ck-browse/agents/openai.yaml";
+const legacyCodexSkillPath = "codex/skills/st4ck-browse/SKILL.md";
 
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 const parse = (relativePath) => JSON.parse(read(relativePath));
 
 const marketplace = parse(".claude-plugin/marketplace.json");
 const manifest = parse(manifestPath);
+const codexMarketplace = parse(".agents/plugins/marketplace.json");
+const codexManifest = parse(codexManifestPath);
 const browseCommand = read("st4ck/commands/browse.md");
 const claudeSkill = read("st4ck/skills/qa-record-test/SKILL.md");
-const codexSkill = read("codex/skills/st4ck-browse/SKILL.md");
+const codexSkill = read(codexSkillPath);
+const codexAgent = read(codexAgentPath);
 const readme = read("README.md");
 
 function check(condition, message) {
@@ -104,13 +111,16 @@ function validateFrontmatter(text, label) {
     `${label} frontmatter must declare a kebab-case name`);
   check(description?.startsWith('"') && description.endsWith('"'),
     `${label} description must be one JSON-compatible quoted YAML scalar`);
+  let parsedDescription;
   try {
-    const parsedDescription = JSON.parse(description);
+    parsedDescription = JSON.parse(description);
     check(typeof parsedDescription === "string" && parsedDescription.trim().length > 0,
       `${label} description must be a non-empty string`);
   } catch (error) {
     throw new Error(`${label} description is not a valid quoted YAML scalar: ${error.message}`);
   }
+
+  return { name, description: parsedDescription };
 }
 
 const browseCommandStart = /^(?:\$\s*)?(?:(?:npx(?:\s+(?:-y|--yes))?\s+st4ck(?:@[^\s]+)?)|st4ck)\s+browse\b/;
@@ -535,15 +545,96 @@ check(typeof manifest.version === "string" && parseSemver(manifest.version),
 check(manifest.author && typeof manifest.author === "object" && typeof manifest.author.name === "string",
   "plugin.json author must be an object accepted by Claude Code");
 
+const allowedCodexMarketplaceKeys = new Set(["name", "interface", "plugins"]);
+const unknownCodexMarketplaceKeys = Object.keys(codexMarketplace)
+  .filter((key) => !allowedCodexMarketplaceKeys.has(key));
+check(unknownCodexMarketplaceKeys.length === 0,
+  `Codex marketplace root contains unsupported keys: ${unknownCodexMarketplaceKeys.join(", ")}`);
+check(codexMarketplace.name === "st4ck-lite-marketplace",
+  "Codex marketplace name must remain st4ck-lite-marketplace");
+check(codexMarketplace.interface?.displayName === "st4ck Lite",
+  "Codex marketplace must expose the st4ck Lite display name");
+
+const codexEntry = codexMarketplace.plugins?.find((plugin) => plugin.name === codexManifest.name);
+check(codexEntry, `Codex marketplace has no entry for plugin ${codexManifest.name}`);
+check(codexEntry.source?.source === "local"
+  && codexEntry.source?.path === "./plugins/st4ck-lite",
+  "Codex marketplace source must remain the local ./plugins/st4ck-lite package");
+check(codexEntry.policy?.installation === "AVAILABLE"
+  && codexEntry.policy?.authentication === "ON_INSTALL",
+  "Codex marketplace policy must remain AVAILABLE with ON_INSTALL authentication timing");
+check(codexEntry.category === "Engineering",
+  "Codex marketplace category must remain Engineering");
+check(!Object.hasOwn(codexEntry, "version"),
+  "declare the Codex plugin version only in plugins/st4ck-lite/.codex-plugin/plugin.json");
+
+const allowedCodexManifestKeys = new Set([
+  "name", "version", "description", "author", "homepage", "repository",
+  "license", "keywords", "skills", "interface",
+]);
+const unknownCodexManifestKeys = Object.keys(codexManifest)
+  .filter((key) => !allowedCodexManifestKeys.has(key));
+check(unknownCodexManifestKeys.length === 0,
+  `Codex plugin manifest contains unsupported keys: ${unknownCodexManifestKeys.join(", ")}`);
+check(codexManifest.name === manifest.name,
+  "Claude and Codex plugin manifests must use the same plugin name");
+check(typeof codexManifest.version === "string" && parseSemver(codexManifest.version),
+  "Codex plugin manifest must contain a valid SemVer version");
+check(codexManifest.version === manifest.version,
+  "Claude and Codex plugin manifest versions must match");
+check(codexManifest.description === "Provide st4ck Browse guidance for explicitly requested browser QA and deterministic local test recording.",
+  "Codex plugin description must preserve the explicit browser-QA boundary");
+check(codexManifest.skills === "./skills/",
+  "Codex plugin manifest skills path must remain ./skills/");
+check(codexManifest.author && typeof codexManifest.author === "object"
+  && typeof codexManifest.author.name === "string",
+  "Codex plugin manifest author must be an object with a name");
+for (const field of [
+  "displayName", "shortDescription", "longDescription", "developerName", "category",
+]) {
+  check(typeof codexManifest.interface?.[field] === "string"
+    && codexManifest.interface[field].trim().length > 0,
+    `Codex plugin interface.${field} must be a non-empty string`);
+}
+check(Array.isArray(codexManifest.interface?.capabilities)
+  && codexManifest.interface.capabilities.every((value) => typeof value === "string" && value.trim()),
+  "Codex plugin interface.capabilities must be an array of non-empty strings");
+check(Array.isArray(codexManifest.interface?.defaultPrompt)
+  && codexManifest.interface.defaultPrompt.length >= 1
+  && codexManifest.interface.defaultPrompt.length <= 3
+  && codexManifest.interface.defaultPrompt.every(
+    (value) => typeof value === "string" && value.length > 0 && value.length <= 128,
+  ),
+  "Codex plugin interface.defaultPrompt must contain 1-3 non-empty strings of at most 128 characters");
+check(codexManifest.interface.defaultPrompt[0]
+  === "Use $st4ck-browse to verify this UI and record a replayable test.",
+  "Codex plugin interface.defaultPrompt must explicitly invoke $st4ck-browse");
+check(!fs.existsSync(path.join(root, legacyCodexSkillPath)),
+  `legacy Codex skill source must be removed: ${legacyCodexSkillPath}`);
+
 validateFrontmatter(claudeSkill, "Claude qa-record-test skill");
-validateFrontmatter(codexSkill, "Codex st4ck-browse skill");
+const codexFrontmatter = validateFrontmatter(codexSkill, "Codex st4ck-browse skill");
+const expectedCodexDescription = "Drive a browser with the st4ck Browse CLI only when the user explicitly says \"st4ck browse\" or \"st4ck browser\", explicitly invokes $st4ck-browse, or explicitly asks to use st4ck for browser QA or test recording. Do not use for general st4ck refresh, sync, deploy, logs, issues, API, or MCP work unless browser interaction is explicitly requested.";
+check(codexFrontmatter.description === expectedCodexDescription,
+  "Codex st4ck-browse description must preserve the explicit browser-intent boundary");
+check(/Do not use this skill for general st4ck refresh, sync, deploy, logs, issues, API, or MCP work unless browser interaction is explicitly requested\./.test(codexSkill),
+  "Codex st4ck-browse body must preserve the non-browser st4ck exclusions");
+check(/default_prompt: "Use \$st4ck-browse\b/.test(codexAgent),
+  "Codex st4ck-browse agent metadata must provide an explicit $st4ck-browse prompt");
+check(/policy:\n\s+allow_implicit_invocation: false\b/.test(codexAgent),
+  "Codex st4ck-browse must require explicit invocation");
 
 check(isGreaterVersion("1.2.3-rc.2+build.7", "1.2.3-rc.1"),
   "internal SemVer comparison must support prerelease/build syntax");
 check(isGreaterVersion("1.2.3", "1.2.3-rc.2"),
   "a SemVer release must sort after its prereleases");
 
-const versionedPaths = ["st4ck", "codex/skills/st4ck-browse/SKILL.md"];
+const versionedPaths = [
+  "st4ck",
+  ".agents/plugins/marketplace.json",
+  "plugins/st4ck-lite",
+  "codex",
+];
 requireBaseRef(baseRef);
 const changedTracked = git(["diff", "--name-only", baseRef, "--", ...versionedPaths])
   .trim().split("\n").filter(Boolean);
@@ -602,7 +693,7 @@ const shippedDocPaths = [
   "README.md",
   ...markdownFiles("st4ck/commands"),
   ...markdownFiles("st4ck/skills"),
-  ...markdownFiles("codex/skills"),
+  ...markdownFiles("plugins/st4ck-lite/skills"),
 ];
 const explicitCliPin = /\bst4ck@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b/;
 for (const relativePath of shippedDocPaths) {
@@ -618,9 +709,15 @@ check(/st4ck-lite` \/ local/.test(readme) && /Full `st4ck` \+ workspace/.test(re
   "README must distinguish the Lite/local and full st4ck+workspace surfaces");
 check(readme.includes(`\`${manifest.version}\``),
   `README status must include plugin version ${manifest.version}`);
+check(readme.includes("codex plugin marketplace add https://github.com/edo-ceder/st4ck-lite.git")
+  && readme.includes("codex plugin marketplace upgrade st4ck-lite-marketplace")
+  && readme.includes("codex plugin add st4ck-lite@st4ck-lite-marketplace"),
+  "README must document native Codex install and update commands");
+check(readme.includes("Invoke the browser workflow explicitly with `$st4ck-browse`."),
+  "README must document explicit Codex skill invocation");
 check(!/10[- ](?:primitive|action)|per-call dispatch flags/i.test(readme),
   "README contains stale compact-vocabulary or Browse dispatch claims");
 check(!/plugin manifest schema has no version-pinning field/i.test(readme),
   "README contains the obsolete plugin-version statement");
 
-process.stdout.write(`ok: st4ck-lite ${manifest.version} manifests and Claude/Codex Browse contracts are coherent\n`);
+process.stdout.write(`ok: st4ck-lite ${manifest.version} native Claude/Codex packages and Browse contracts are coherent\n`);

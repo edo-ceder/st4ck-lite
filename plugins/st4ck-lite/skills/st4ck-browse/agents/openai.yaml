@@ -1,0 +1,6 @@
+interface:
+  display_name: "st4ck Browse"
+  short_description: "Drive and record browser QA with st4ck Browse"
+  default_prompt: "Use $st4ck-browse to verify this UI and record a replayable test."
+policy:
+  allow_implicit_invocation: false

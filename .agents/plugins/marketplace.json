@@ -1,0 +1,20 @@
+{
+  "name": "st4ck-lite-marketplace",
+  "interface": {
+    "displayName": "st4ck Lite"
+  },
+  "plugins": [
+    {
+      "name": "st4ck-lite",
+      "source": {
+        "source": "local",
+        "path": "./plugins/st4ck-lite"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Engineering"
+    }
+  ]
+}

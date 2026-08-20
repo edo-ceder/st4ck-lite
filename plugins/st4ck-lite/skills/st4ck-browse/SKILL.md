@@ -1,11 +1,11 @@
 ---
 name: st4ck-browse
-description: "Use the st4ck Browse CLI for browser driving, live UI verification, QA recording, Bubble exploration, and deterministic local test authoring."
+description: "Drive a browser with the st4ck Browse CLI only when the user explicitly says \"st4ck browse\" or \"st4ck browser\", explicitly invokes $st4ck-browse, or explicitly asks to use st4ck for browser QA or test recording. Do not use for general st4ck refresh, sync, deploy, logs, issues, API, or MCP work unless browser interaction is explicitly requested."
 ---
 
 # st4ck Browse
 
-Use `npx st4ck@latest browse ...` when the user says “st4ck browse” or “st4ck browser,” or asks for st4ck-driven browser QA. Prefer this surface over generic browser automation unless the user explicitly asks for another tool.
+Use `npx st4ck@latest browse ...` only when the user explicitly says “st4ck browse” or “st4ck browser,” explicitly invokes `$st4ck-browse`, or explicitly asks to use st4ck for browser QA or test recording. Do not use this skill for general st4ck refresh, sync, deploy, logs, issues, API, or MCP work unless browser interaction is explicitly requested. Prefer this surface over generic browser automation unless the user explicitly asks for another tool.
 
 ## Verify the installed contract
 
