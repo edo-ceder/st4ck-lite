@@ -1,0 +1,38 @@
+{
+  "name": "st4ck-lite",
+  "version": "0.2.0-alpha.2",
+  "description": "Provide st4ck Browse guidance for explicitly requested browser QA and deterministic local test recording.",
+  "author": {
+    "name": "st4ck",
+    "email": "hello@st4ck.io",
+    "url": "https://st4ck.io"
+  },
+  "homepage": "https://st4ck.io",
+  "repository": "https://github.com/edo-ceder/st4ck-lite",
+  "license": "Apache-2.0",
+  "keywords": [
+    "testing",
+    "e2e",
+    "browser",
+    "playwright",
+    "agent",
+    "regression"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "st4ck Browse",
+    "shortDescription": "Drive and record browser QA with st4ck Browse.",
+    "longDescription": "Use st4ck Browse to inspect live interfaces, drive explicit browser QA, record deterministic test traces, and replay them locally.",
+    "developerName": "st4ck",
+    "category": "Engineering",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://st4ck.io",
+    "defaultPrompt": [
+      "Use $st4ck-browse to verify this UI and record a replayable test."
+    ]
+  }
+}
